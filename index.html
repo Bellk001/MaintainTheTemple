@@ -249,6 +249,37 @@ select.fi{cursor:pointer}
 .rating-row{display:flex;gap:.5rem;justify-content:center;margin-top:.5rem}
 .rating-btn{flex:1;padding:.65rem .3rem;border-radius:10px;border:2px solid var(--bdr);background:var(--bg2);cursor:pointer;transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:.2rem;font-size:.78rem;font-weight:600;color:var(--tx2)}
 .rating-btn.sel{border-color:var(--pu);background:var(--pu-lt);color:var(--pu2)}
+
+/* STRENGTH STYLES */
+.body-map-wrap{position:relative;display:flex;gap:.6rem;justify-content:center;margin-bottom:1rem}
+.body-map-svg{width:140px;height:auto;cursor:pointer}
+.muscle-area{fill:rgba(124,58,237,.12);stroke:rgba(124,58,237,.3);stroke-width:1.5;cursor:pointer;transition:all .2s}
+.muscle-area:hover,.muscle-area.active{fill:rgba(124,58,237,.45);stroke:#7c3aed;stroke-width:2.5}
+.ex-card{background:var(--surf);border:1.5px solid var(--bdr);border-radius:12px;padding:.9rem 1rem;margin-bottom:.55rem;cursor:pointer;transition:all .18s}
+.ex-card:hover{border-color:var(--pu);background:var(--pu-lt)}
+.ex-card.selected{border-color:var(--pu);background:var(--pu-lt)}
+.ex-name{font-weight:700;font-size:.9rem;color:var(--tx);margin-bottom:.18rem}
+.ex-meta{font-size:.73rem;color:var(--mu);margin-bottom:.3rem}
+.ex-badge{display:inline-flex;gap:.3rem;flex-wrap:wrap}
+.template-card{background:linear-gradient(135deg,var(--pu3),var(--pu));border-radius:12px;padding:1.1rem 1.2rem;color:#fff;margin-bottom:.6rem;cursor:pointer;transition:transform .18s}
+.template-card:hover{transform:translateY(-2px)}
+.tc-icon{font-size:1.5rem;margin-bottom:.3rem}
+.tc-name{font-weight:700;font-size:.95rem;margin-bottom:.15rem}
+.tc-meta{font-size:.77rem;opacity:.8}
+.set-row{display:flex;gap:.5rem;align-items:center;padding:.55rem 0;border-bottom:1px solid var(--bdr)}
+.set-row:last-child{border-bottom:none}
+.set-num{width:28px;height:28px;background:var(--pu-lt);color:var(--pu2);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:800;flex-shrink:0}
+.set-input{width:70px;padding:.38rem .5rem;border-radius:7px;border:1.5px solid var(--bdr);background:var(--bg2);color:var(--tx);font-size:.84rem;text-align:center;font-family:'Space Grotesk',sans-serif}
+.set-input:focus{border-color:var(--pu)}
+.rest-timer{position:fixed;bottom:5rem;left:50%;transform:translateX(-50%);background:var(--pu3);color:#fff;padding:.65rem 1.4rem;border-radius:14px;font-size:1.05rem;font-weight:700;z-index:150;display:none;box-shadow:var(--sh2);gap:.8rem;align-items:center}
+.rest-timer.show{display:flex}
+.pr-badge{background:var(--gold-lt);color:#92400e;border:1px solid var(--gold);border-radius:6px;padding:.2rem .55rem;font-size:.68rem;font-weight:700}
+.workout-summary{background:var(--surf);border:1px solid var(--bdr);border-radius:12px;padding:1rem 1.1rem;margin-bottom:.6rem}
+.ws-title{font-weight:700;font-size:.9rem;margin-bottom:.3rem}
+.ws-meta{font-size:.76rem;color:var(--mu);margin-bottom:.5rem}
+.ws-sets{font-size:.82rem;color:var(--tx2)}
+.muscle-chip{display:inline-flex;align-items:center;padding:.28rem .7rem;border-radius:20px;font-size:.74rem;font-weight:600;cursor:pointer;border:1.5px solid var(--bdr);background:var(--bg2);color:var(--tx2);transition:all .15s;margin:.2rem}
+.muscle-chip.active{background:var(--pu);color:#fff;border-color:var(--pu)}
 </style>
 </head>
 <body>
@@ -272,6 +303,7 @@ select.fi{cursor:pointer}
 <div class="page" id="pg-walk"></div>
 <div class="page" id="pg-fasting"></div>
 <div class="page" id="pg-nutrition"></div>
+<div class="page" id="pg-strength"></div>
 <div class="page" id="pg-body"></div>
 
 <!-- BOTTOM NAV -->
@@ -287,6 +319,9 @@ select.fi{cursor:pointer}
   </button>
   <button class="nav-item" data-page="nutrition" onclick="switchPage('nutrition')">
     <span class="nav-icon">🥗</span><span class="nav-label">Nutrition</span>
+  </button>
+  <button class="nav-item" data-page="strength" onclick="switchPage('strength')">
+    <span class="nav-icon">💪</span><span class="nav-label">Train</span>
   </button>
   <button class="nav-item" data-page="body" onclick="switchPage('body')">
     <span class="nav-icon">📊</span><span class="nav-label">Body</span>
@@ -619,6 +654,7 @@ function renderPage(page){
   else if(page==='walk') renderWalk();
   else if(page==='fasting') renderFasting();
   else if(page==='nutrition') renderNutrition();
+  else if(page==='strength') renderStrength();
   else if(page==='body') renderBody();
 }
 function renderAll(){renderPage(S.currentPage);}
@@ -1412,6 +1448,59 @@ function initFastModal(){
 </div>
 </div>
 
+
+<!-- REST TIMER -->
+<div class="rest-timer" id="rest-timer">
+  <span>Rest</span>
+  <span id="rest-countdown">60</span>
+  <button onclick="skipRest()" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:.2rem .7rem;border-radius:6px;cursor:pointer;font-size:.8rem">Skip</button>
+</div>
+
+<!-- EXERCISE DETAIL / LOG SETS -->
+<div class="mo" id="mo-exercise">
+<div class="mo-box">
+  <div class="mo-handle"></div>
+  <div class="mo-title" id="ex-mo-name"></div>
+  <div id="ex-mo-meta" style="font-size:.78rem;color:var(--mu);margin-bottom:.5rem"></div>
+  <div id="ex-mo-prog" style="font-size:.8rem;color:var(--pu);font-weight:600;margin-bottom:.6rem"></div>
+  <div class="fg"><label>Sets for this exercise</label>
+    <div id="ex-sets-list"></div>
+  </div>
+  <div style="display:flex;gap:.5rem;margin-bottom:1rem">
+    <button class="btn btn-ghost btn-sm" onclick="addSet()">+ Add Set</button>
+    <button class="btn btn-ghost btn-sm" onclick="removeSet()">- Remove Set</button>
+  </div>
+  <div class="fg"><label>Rest timer between sets</label>
+    <select class="fi" id="ex-rest-secs">
+      <option value="30">30 seconds</option>
+      <option value="60" selected>60 seconds</option>
+      <option value="90">90 seconds</option>
+      <option value="120">2 minutes</option>
+      <option value="0">No rest timer</option>
+    </select>
+  </div>
+  <button class="btn btn-pu btn-fw" onclick="saveExerciseSets()">Save Exercise ✓</button>
+</div>
+</div>
+
+<!-- WORKOUT COMPLETE -->
+<div class="mo" id="mo-workout-done">
+<div class="mo-box">
+  <div class="mo-handle"></div>
+  <div class="mo-title">Workout Complete! 🏆</div>
+  <div id="wd-summary" style="margin-bottom:1rem"></div>
+  <div class="fg"><label>How did it go?</label>
+    <div class="feel-row">
+      <button class="feel-btn" data-feel="1" onclick="selectWorkoutFeel(this)"><span>😫</span><span>Hard</span></button>
+      <button class="feel-btn" data-feel="2" onclick="selectWorkoutFeel(this)"><span>😐</span><span>OK</span></button>
+      <button class="feel-btn" data-feel="3" onclick="selectWorkoutFeel(this)"><span>😊</span><span>Good</span></button>
+      <button class="feel-btn" data-feel="4" onclick="selectWorkoutFeel(this)"><span>💪</span><span>Great</span></button>
+    </div>
+  </div>
+  <button class="btn btn-pu btn-fw btn-lg" onclick="saveWorkout()">Save Workout</button>
+</div>
+</div>
+
 </body>
 </html>
 <script>
@@ -1850,4 +1939,472 @@ function saveDayRating(){
 // ── ALSO ADD NUTRITION QUICK-LOG TO DASHBOARD ──
 // Patch dashboard renderDashboard to include nutrition link
 var _origRenderNutrQuick=renderDashboard;
+</script>
+<script>
+// ═══════════════════════════════════════════════
+// EXERCISE LIBRARY — Dumbbell + Bodyweight
+// {id, name, muscles[], primary, equipment, sets, reps, desc, difficulty}
+// ═══════════════════════════════════════════════
+var EXERCISES=[
+  // ── CHEST ──
+  {id:'db-press',name:'Dumbbell Chest Press',muscles:['chest'],primary:'chest',equip:'dumbbell',sets:3,reps:'8-12',diff:'beginner',
+   desc:'Lie on your back, hold dumbbells at chest level, push up until arms are straight. Lower slowly.'},
+  {id:'db-fly',name:'Dumbbell Chest Fly',muscles:['chest','shoulders'],primary:'chest',equip:'dumbbell',sets:3,reps:'10-12',diff:'beginner',
+   desc:'Lie on back, arms out wide with slight bend at elbow. Bring dumbbells together over chest.'},
+  {id:'pushup',name:'Push-Up',muscles:['chest','triceps','shoulders'],primary:'chest',equip:'bodyweight',sets:3,reps:'10-20',diff:'beginner',
+   desc:'Start in plank position, hands shoulder-width. Lower chest to floor then push back up.'},
+  {id:'wide-pushup',name:'Wide Push-Up',muscles:['chest'],primary:'chest',equip:'bodyweight',sets:3,reps:'10-15',diff:'beginner',
+   desc:'Push-up with hands wider than shoulder-width — targets outer chest more.'},
+  {id:'incline-pushup',name:'Incline Push-Up',muscles:['chest','shoulders'],primary:'chest',equip:'bodyweight',sets:3,reps:'12-15',diff:'beginner',
+   desc:'Hands on elevated surface (bed, chair). Targets upper chest.'},
+
+  // ── SHOULDERS ──
+  {id:'db-shoulder-press',name:'Dumbbell Shoulder Press',muscles:['shoulders','triceps'],primary:'shoulders',equip:'dumbbell',sets:3,reps:'8-12',diff:'beginner',
+   desc:'Sit or stand, dumbbells at shoulder height. Press overhead until arms are straight.'},
+  {id:'db-lateral-raise',name:'Lateral Raise',muscles:['shoulders'],primary:'shoulders',equip:'dumbbell',sets:3,reps:'12-15',diff:'beginner',
+   desc:'Stand with dumbbells at sides. Raise arms out to the side to shoulder height. Lower slowly.'},
+  {id:'db-front-raise',name:'Front Raise',muscles:['shoulders'],primary:'shoulders',equip:'dumbbell',sets:3,reps:'12-15',diff:'beginner',
+   desc:'Hold dumbbells at thighs. Raise one or both arms forward to shoulder height.'},
+  {id:'db-arnold-press',name:'Arnold Press',muscles:['shoulders','triceps'],primary:'shoulders',equip:'dumbbell',sets:3,reps:'10-12',diff:'intermediate',
+   desc:'Start with dumbbells in front of face, palms facing you. Press overhead while rotating palms outward.'},
+  {id:'pike-pushup',name:'Pike Push-Up',muscles:['shoulders','triceps'],primary:'shoulders',equip:'bodyweight',sets:3,reps:'8-12',diff:'intermediate',
+   desc:'Start in downward dog position. Bend elbows to lower head toward floor, then press back up.'},
+
+  // ── BICEPS ──
+  {id:'db-curl',name:'Dumbbell Bicep Curl',muscles:['biceps'],primary:'biceps',equip:'dumbbell',sets:3,reps:'10-15',diff:'beginner',
+   desc:'Stand with dumbbells at sides, palms forward. Curl both arms up to shoulders. Lower slowly.'},
+  {id:'db-hammer-curl',name:'Hammer Curl',muscles:['biceps','forearms'],primary:'biceps',equip:'dumbbell',sets:3,reps:'10-12',diff:'beginner',
+   desc:'Same as curl but keep palms facing each other throughout the movement.'},
+  {id:'db-concentration-curl',name:'Concentration Curl',muscles:['biceps'],primary:'biceps',equip:'dumbbell',sets:3,reps:'10-12',diff:'beginner',
+   desc:'Sit, rest elbow on inner thigh. Curl weight up toward shoulder. Full range of motion.'},
+  {id:'db-incline-curl',name:'Incline Dumbbell Curl',muscles:['biceps'],primary:'biceps',equip:'dumbbell',sets:3,reps:'10-12',diff:'intermediate',
+   desc:'Lie back on inclined surface, arms hanging down. Curl both dumbbells up. Great stretch at bottom.'},
+
+  // ── TRICEPS ──
+  {id:'db-overhead-ext',name:'Overhead Tricep Extension',muscles:['triceps'],primary:'triceps',equip:'dumbbell',sets:3,reps:'10-15',diff:'beginner',
+   desc:'Hold one dumbbell overhead with both hands. Lower behind head, then extend back up.'},
+  {id:'db-kickback',name:'Tricep Kickback',muscles:['triceps'],primary:'triceps',equip:'dumbbell',sets:3,reps:'12-15',diff:'beginner',
+   desc:'Hinge forward, upper arm parallel to floor. Extend forearm back until arm is straight.'},
+  {id:'diamond-pushup',name:'Diamond Push-Up',muscles:['triceps','chest'],primary:'triceps',equip:'bodyweight',sets:3,reps:'8-15',diff:'intermediate',
+   desc:'Push-up with hands close together forming a diamond shape. Hits triceps hard.'},
+  {id:'bench-dip',name:'Tricep Dip (Chair)',muscles:['triceps','chest'],primary:'triceps',equip:'bodyweight',sets:3,reps:'10-15',diff:'beginner',
+   desc:'Hands on chair behind you, feet out. Lower body by bending elbows, then push back up.'},
+
+  // ── BACK / LATS ──
+  {id:'db-row',name:'Dumbbell Row',muscles:['back','biceps'],primary:'back',equip:'dumbbell',sets:3,reps:'10-12',diff:'beginner',
+   desc:'One hand on surface for support. Pull dumbbell up to hip. Squeeze back at top. Switch sides.'},
+  {id:'db-bent-row',name:'Bent-Over Row (Both Arms)',muscles:['back','biceps'],primary:'back',equip:'dumbbell',sets:3,reps:'10-12',diff:'beginner',
+   desc:'Hinge forward 45°. Pull both dumbbells up to lower chest. Squeeze shoulder blades.'},
+  {id:'db-pullover',name:'Dumbbell Pullover',muscles:['back','chest'],primary:'back',equip:'dumbbell',sets:3,reps:'10-12',diff:'beginner',
+   desc:'Lie on back. Hold dumbbell over chest, lower behind head, pull back over chest.'},
+  {id:'superman',name:'Superman Hold',muscles:['back','glutes'],primary:'back',equip:'bodyweight',sets:3,reps:'12-15',diff:'beginner',
+   desc:'Lie face down, extend arms forward. Lift arms and legs off floor simultaneously. Hold 2 seconds.'},
+  {id:'db-deadlift',name:'Dumbbell Deadlift',muscles:['back','hamstrings','glutes'],primary:'back',equip:'dumbbell',sets:3,reps:'10-12',diff:'beginner',
+   desc:'Stand with dumbbells in front of thighs. Hinge at hips, lower dumbbells to mid-shin, drive back up.'},
+
+  // ── LOWER BACK ──
+  {id:'good-morning',name:'Dumbbell Good Morning',muscles:['lower-back','hamstrings'],primary:'lower-back',equip:'dumbbell',sets:3,reps:'12-15',diff:'beginner',
+   desc:'Hold dumbbells at shoulders. Hinge at hips with slight knee bend, lower torso, return upright.'},
+  {id:'bird-dog',name:'Bird-Dog',muscles:['lower-back','core'],primary:'lower-back',equip:'bodyweight',sets:3,reps:'10-12',diff:'beginner',
+   desc:'On hands and knees. Extend opposite arm and leg simultaneously. Hold briefly. Switch sides.'},
+
+  // ── ABS / CORE ──
+  {id:'crunch',name:'Crunch',muscles:['abs'],primary:'abs',equip:'bodyweight',sets:3,reps:'15-25',diff:'beginner',
+   desc:'Lie on back, knees bent. Curl shoulders toward knees using abs only. Do not pull neck.'},
+  {id:'plank',name:'Plank',muscles:['abs','back'],primary:'abs',equip:'bodyweight',sets:3,reps:'30-60 sec',diff:'beginner',
+   desc:'Forearms on floor, body straight. Hold position. Breathe steadily. Do not let hips drop.'},
+  {id:'bicycle-crunch',name:'Bicycle Crunch',muscles:['abs'],primary:'abs',equip:'bodyweight',sets:3,reps:'20-30',diff:'beginner',
+   desc:'Lie on back, hands behind head. Alternate bringing elbow to opposite knee in cycling motion.'},
+  {id:'leg-raise',name:'Leg Raise',muscles:['abs'],primary:'abs',equip:'bodyweight',sets:3,reps:'12-15',diff:'intermediate',
+   desc:'Lie flat, hands under hips. Raise straight legs to 90°, lower slowly without touching floor.'},
+  {id:'russian-twist',name:'Russian Twist',muscles:['abs'],primary:'abs',equip:'dumbbell',sets:3,reps:'20-30',diff:'beginner',
+   desc:'Sit leaning back slightly, knees bent. Hold dumbbell and rotate side to side.'},
+  {id:'mountain-climber',name:'Mountain Climber',muscles:['abs','shoulders'],primary:'abs',equip:'bodyweight',sets:3,reps:'20-30',diff:'beginner',
+   desc:'Plank position. Drive knees alternately toward chest in a running motion. Keep hips low.'},
+  {id:'db-crunch',name:'Dumbbell Crunch',muscles:['abs'],primary:'abs',equip:'dumbbell',sets:3,reps:'15-20',diff:'beginner',
+   desc:'Hold dumbbell on chest while doing a crunch. Adds resistance for stronger abs.'},
+  {id:'side-plank',name:'Side Plank',muscles:['abs'],primary:'abs',equip:'bodyweight',sets:3,reps:'20-40 sec',diff:'beginner',
+   desc:'Side-lying on forearm. Raise hips. Body straight. Hold. Switch sides.'},
+
+  // ── QUADS / LEGS ──
+  {id:'db-squat',name:'Goblet Squat',muscles:['quads','glutes'],primary:'quads',equip:'dumbbell',sets:3,reps:'12-15',diff:'beginner',
+   desc:'Hold dumbbell at chest. Feet shoulder-width. Squat deep, keeping chest up, knees out.'},
+  {id:'db-lunge',name:'Dumbbell Lunge',muscles:['quads','glutes','hamstrings'],primary:'quads',equip:'dumbbell',sets:3,reps:'10-12',diff:'beginner',
+   desc:'Hold dumbbells at sides. Step forward into lunge. Back knee nearly touches floor. Alternate legs.'},
+  {id:'squat',name:'Bodyweight Squat',muscles:['quads','glutes'],primary:'quads',equip:'bodyweight',sets:3,reps:'15-25',diff:'beginner',
+   desc:'Feet shoulder-width, toes slightly out. Squat until thighs parallel to floor. Drive through heels.'},
+  {id:'step-up',name:'Step-Up (Chair)',muscles:['quads','glutes'],primary:'quads',equip:'bodyweight',sets:3,reps:'12-15',diff:'beginner',
+   desc:'Step onto a sturdy chair or step. Drive through heel of leading foot. Alternate legs.'},
+  {id:'wall-sit',name:'Wall Sit',muscles:['quads'],primary:'quads',equip:'bodyweight',sets:3,reps:'30-60 sec',diff:'beginner',
+   desc:'Back against wall, lower until thighs parallel to floor. Hold position. Burns the quads.'},
+
+  // ── HAMSTRINGS ──
+  {id:'rdl',name:'Romanian Deadlift (RDL)',muscles:['hamstrings','glutes','lower-back'],primary:'hamstrings',equip:'dumbbell',sets:3,reps:'10-12',diff:'beginner',
+   desc:'Hold dumbbells at thighs. Hinge at hips, lower with slight knee bend until you feel hamstring stretch. Drive back up.'},
+  {id:'db-curl-leg',name:'Lying Hamstring Curl (Band/Dumbbell)',muscles:['hamstrings'],primary:'hamstrings',equip:'dumbbell',sets:3,reps:'12-15',diff:'beginner',
+   desc:'Lie face down. Hold dumbbell between feet. Curl heels toward glutes. Lower slowly.'},
+  {id:'glute-bridge',name:'Glute Bridge',muscles:['hamstrings','glutes'],primary:'hamstrings',equip:'bodyweight',sets:3,reps:'15-20',diff:'beginner',
+   desc:'Lie on back, knees bent. Drive hips up squeezing glutes. Hold briefly at top.'},
+
+  // ── GLUTES ──
+  {id:'db-hip-thrust',name:'Dumbbell Hip Thrust',muscles:['glutes','hamstrings'],primary:'glutes',equip:'dumbbell',sets:3,reps:'12-15',diff:'beginner',
+   desc:'Upper back on couch/bench, dumbbell on hips. Drive hips up powerfully. Squeeze glutes at top.'},
+  {id:'donkey-kick',name:'Donkey Kick',muscles:['glutes'],primary:'glutes',equip:'bodyweight',sets:3,reps:'15-20',diff:'beginner',
+   desc:'On hands and knees. Kick one leg back and up, heel toward ceiling. Squeeze glute at top.'},
+  {id:'db-sumo-squat',name:'Sumo Squat',muscles:['glutes','quads'],primary:'glutes',equip:'dumbbell',sets:3,reps:'12-15',diff:'beginner',
+   desc:'Wide stance, toes pointed out. Hold dumbbell between legs. Squat deep. Great for glutes and inner thighs.'},
+
+  // ── CALVES ──
+  {id:'calf-raise',name:'Calf Raise',muscles:['calves'],primary:'calves',equip:'bodyweight',sets:3,reps:'20-30',diff:'beginner',
+   desc:'Stand on edge of step or flat floor. Rise on toes as high as possible. Lower slowly.'},
+  {id:'db-calf-raise',name:'Weighted Calf Raise',muscles:['calves'],primary:'calves',equip:'dumbbell',sets:3,reps:'15-20',diff:'beginner',
+   desc:'Hold dumbbells at sides. Perform calf raises. Added weight increases intensity.'},
+
+  // ── FOREARMS ──
+  {id:'wrist-curl',name:'Wrist Curl',muscles:['forearms'],primary:'forearms',equip:'dumbbell',sets:3,reps:'15-20',diff:'beginner',
+   desc:'Forearm resting on thigh or surface, wrist over edge. Curl wrist upward. Switch arms.'},
+  {id:'reverse-curl',name:'Reverse Curl',muscles:['forearms','biceps'],primary:'forearms',equip:'dumbbell',sets:3,reps:'12-15',diff:'beginner',
+   desc:'Hold dumbbells with palms facing down. Curl up. Hits forearms and outer biceps.'},
+
+  // ── TRAPS / UPPER BACK ──
+  {id:'db-shrug',name:'Dumbbell Shrug',muscles:['traps'],primary:'traps',equip:'dumbbell',sets:3,reps:'12-15',diff:'beginner',
+   desc:'Hold dumbbells at sides. Shrug shoulders up toward ears. Hold briefly. Lower slowly.'},
+  {id:'db-upright-row',name:'Upright Row',muscles:['traps','shoulders'],primary:'traps',equip:'dumbbell',sets:3,reps:'10-12',diff:'intermediate',
+   desc:'Hold dumbbells in front, pull up to chin level with elbows flaring out. Lower slowly.'},
+  {id:'rear-delt-fly',name:'Rear Delt Fly',muscles:['rear-delts','traps'],primary:'rear-delts',equip:'dumbbell',sets:3,reps:'12-15',diff:'beginner',
+   desc:'Hinge forward. Arms hanging down. Raise arms out to sides until parallel to floor. Squeeze shoulder blades.'},
+];
+
+// WORKOUT TEMPLATES
+var TEMPLATES=[
+  {id:'fullbody',name:'Full Body',icon:'💪',duration:'40-50 min',exercises:['db-press','db-row','db-squat','rdl','db-shoulder-press','crunch','plank'],desc:'Complete full body session'},
+  {id:'upper',name:'Upper Body',icon:'🏋️',duration:'35-45 min',exercises:['db-press','db-row','db-shoulder-press','db-curl','db-overhead-ext','rear-delt-fly','db-fly'],desc:'Chest, back, shoulders, arms'},
+  {id:'lower',name:'Lower Body',icon:'🦵',duration:'30-40 min',exercises:['db-squat','rdl','db-lunge','db-hip-thrust','calf-raise','glute-bridge'],desc:'Quads, hamstrings, glutes, calves'},
+  {id:'core',name:'Core & Abs',icon:'🎯',duration:'20-25 min',exercises:['plank','crunch','bicycle-crunch','leg-raise','russian-twist','mountain-climber','side-plank'],desc:'Full core burn'},
+  {id:'push',name:'Push Day',icon:'⬆️',duration:'35-40 min',exercises:['db-press','db-shoulder-press','db-fly','db-lateral-raise','db-overhead-ext','diamond-pushup'],desc:'Chest, shoulders, triceps'},
+  {id:'pull',name:'Pull Day',icon:'⬇️',duration:'35-40 min',exercises:['db-row','db-bent-row','db-curl','db-hammer-curl','db-shrug','rear-delt-fly','db-pullover'],desc:'Back, biceps, traps'},
+];
+
+// MUSCLES for body map chips
+var MUSCLES=[
+  {id:'chest',label:'Chest',icon:'🫁'},
+  {id:'shoulders',label:'Shoulders',icon:'💪'},
+  {id:'biceps',label:'Biceps',icon:'💪'},
+  {id:'triceps',label:'Triceps',icon:'💪'},
+  {id:'forearms',label:'Forearms',icon:'🦾'},
+  {id:'abs',label:'Abs',icon:'🎯'},
+  {id:'quads',label:'Quads',icon:'🦵'},
+  {id:'back',label:'Back / Lats',icon:'🔙'},
+  {id:'traps',label:'Traps',icon:'🔝'},
+  {id:'rear-delts',label:'Rear Delts',icon:'🔙'},
+  {id:'lower-back',label:'Lower Back',icon:'🔙'},
+  {id:'hamstrings',label:'Hamstrings',icon:'🦵'},
+  {id:'glutes',label:'Glutes',icon:'🍑'},
+  {id:'calves',label:'Calves',icon:'🦶'},
+];
+
+// ═══════════════════════════════════════════════
+// STRENGTH STATE
+// ═══════════════════════════════════════════════
+var _activeMuscle=null;
+var _activeWorkout={exercises:[],startTime:null}; // current session
+var _currentExercise=null;
+var _workoutFeel=3;
+var _restInterval=null;
+
+// ═══════════════════════════════════════════════
+// RENDER STRENGTH PAGE
+// ═══════════════════════════════════════════════
+function renderStrength(){
+  document.getElementById('topbar-main').textContent='Strength Training 💪';
+  document.getElementById('topbar-sub').textContent='Dumbbell + Bodyweight';
+  var workouts=loadLocal('workouts',[]);
+  var lastFive=workouts.slice(0,5);
+  var totalSets=workouts.reduce(function(s,w){return s+(w.totalSets||0);},0);
+  var prs=loadLocal('personalRecords',{});
+  var prCount=Object.keys(prs).length;
+  // Active workout indicator
+  var activeBar=_activeWorkout.startTime
+    ?'<div style="background:var(--green);color:#fff;border-radius:10px;padding:.65rem 1rem;display:flex;align-items:center;justify-content:space-between;margin-bottom:.85rem">'
+      +'<div><div style="font-weight:700;font-size:.9rem">Workout in progress</div>'
+      +'<div style="font-size:.76rem;opacity:.85">'+_activeWorkout.exercises.length+' exercise(s) logged</div></div>'
+      +'<button class="btn btn-sm" style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3)" onclick="finishWorkout()">Finish 🏁</button>'
+      +'</div>'
+    :'';
+  // Templates
+  var templateHTML=TEMPLATES.map(function(t){
+    return '<div class="template-card" onclick="startTemplate(\''+t.id+'\')">'
+      +'<div class="tc-icon">'+t.icon+'</div>'
+      +'<div class="tc-name">'+t.name+'</div>'
+      +'<div class="tc-meta">'+t.duration+' · '+t.exercises.length+' exercises</div>'
+      +'<div class="tc-meta" style="margin-top:.2rem">'+t.desc+'</div>'
+      +'</div>';
+  }).join('');
+  // Muscle chips for custom
+  var chipHTML=MUSCLES.map(function(m){
+    return '<span class="muscle-chip'+((_activeMuscle===m.id)?' active':'')+'" onclick="selectMuscle(\''+m.id+'\')">'+m.icon+' '+m.label+'</span>';
+  }).join('');
+  // Exercise list for selected muscle
+  var exListHTML='';
+  if(_activeMuscle){
+    var exForMuscle=EXERCISES.filter(function(e){return e.muscles.indexOf(_activeMuscle)>-1;});
+    exListHTML='<div style="margin-top:.7rem">'
+      +'<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--mu);margin-bottom:.5rem">Exercises for '+MUSCLES.find(function(m){return m.id===_activeMuscle;}).label+'</div>'
+      +exForMuscle.map(function(e){
+        var already=_activeWorkout.exercises.some(function(a){return a.exId===e.id;});
+        var pr=prs[e.id];
+        return '<div class="ex-card'+(already?' selected':'')+'" onclick="openExercise(\''+e.id+'\')">'
+          +'<div class="ex-name">'+esc(e.name)+(already?' ✓':'')+'</div>'
+          +'<div class="ex-meta">'+(e.equip==='dumbbell'?'🏋️ Dumbbell':'🤸 Bodyweight')+' · '+e.sets+'×'+e.reps+'</div>'
+          +'<div class="ex-badge">'
+          +'<span class="bdg '+(e.diff==='beginner'?'bdg-green':'bdg-pu')+'">'+e.diff+'</span>'
+          +(pr?'<span class="pr-badge">🏆 PR: '+pr.weight+'kg × '+pr.reps+'</span>':'')
+          +'</div>'
+          +'</div>';
+      }).join('')
+      +'</div>';
+  }
+  // History
+  var histHTML=lastFive.length?lastFive.map(function(w){
+    return '<div class="workout-summary">'
+      +'<div class="ws-title">'+w.exercises.length+' exercises · '+w.totalSets+' sets</div>'
+      +'<div class="ws-meta">'+fmtDate(w.date)+' · '+Math.round(w.durationMins||0)+'min · '+['','😫','😐','😊','💪'][w.feel||3]+'</div>'
+      +'<div class="ws-sets">'+w.exercises.slice(0,3).map(function(e){return esc(e.name);}).join(', ')+(w.exercises.length>3?' +more':'')+'</div>'
+      +'</div>';
+  }).join(''):'<div style="text-align:center;padding:1.5rem;color:var(--mu);font-size:.86rem">No workouts yet. Start your first session!</div>';
+
+  document.getElementById('pg-strength').innerHTML=
+    activeBar
+    +'<div class="stat-row" style="margin-bottom:.85rem">'
+    +'<div class="stat-box"><div class="stat-n">'+workouts.length+'</div><div class="stat-l">Workouts</div></div>'
+    +'<div class="stat-box"><div class="stat-n">'+totalSets+'</div><div class="stat-l">Total Sets</div></div>'
+    +'<div class="stat-box"><div class="stat-n">'+prCount+'</div><div class="stat-l">PRs</div></div>'
+    +'</div>'
+    // Templates
+    +'<div class="card">'
+    +'<div class="sec-head"><div class="sec-title">Quick Start</div></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:.55rem">'+templateHTML+'</div>'
+    +'</div>'
+    // Custom — body map muscle selector
+    +'<div class="card">'
+    +'<div class="sec-head"><div class="sec-title">Custom — By Muscle</div>'
+    +(_activeWorkout.startTime&&_activeMuscle?'<button class="btn btn-pu btn-sm" onclick="finishWorkout()">Finish Workout 🏁</button>':'')
+    +'</div>'
+    +'<div style="display:flex;flex-wrap:wrap">'+chipHTML+'</div>'
+    +exListHTML
+    +'</div>'
+    // History
+    +'<div class="card"><div class="sec-head"><div class="sec-title">Last 5 Workouts</div></div>'+histHTML+'</div>';
+}
+
+// ═══════════════════════════════════════════════
+// MUSCLE SELECTION
+// ═══════════════════════════════════════════════
+function selectMuscle(id){
+  _activeMuscle=id;
+  if(!_activeWorkout.startTime){
+    _activeWorkout={exercises:[],startTime:Date.now()};
+  }
+  renderStrength();
+}
+
+// ═══════════════════════════════════════════════
+// TEMPLATES
+// ═══════════════════════════════════════════════
+function startTemplate(templateId){
+  var t=TEMPLATES.find(function(x){return x.id===templateId;});
+  if(!t) return;
+  _activeWorkout={exercises:[],startTime:Date.now(),templateName:t.name};
+  _activeMuscle=null;
+  // Open each exercise in sequence
+  var exIds=t.exercises;
+  openExercisesSequence(exIds,0);
+}
+function openExercisesSequence(exIds,idx){
+  if(idx>=exIds.length){
+    finishWorkout();return;
+  }
+  openExercise(exIds[idx],function(){openExercisesSequence(exIds,idx+1);});
+}
+
+// ═══════════════════════════════════════════════
+// EXERCISE LOGGING
+// ═══════════════════════════════════════════════
+var _exCallback=null;
+function openExercise(exId,callback){
+  var ex=EXERCISES.find(function(e){return e.id===exId;});
+  if(!ex) return;
+  _currentExercise=ex;
+  _exCallback=callback||null;
+  // Get last session for this exercise
+  var prs=loadLocal('personalRecords',{});
+  var pr=prs[exId];
+  var workouts=loadLocal('workouts',[]);
+  var lastLog=null;
+  for(var i=0;i<workouts.length;i++){
+    var found=workouts[i].exercises.find(function(e){return e.exId===exId;});
+    if(found){lastLog=found;break;}
+  }
+  document.getElementById('ex-mo-name').textContent=ex.name;
+  document.getElementById('ex-mo-meta').textContent=
+    (ex.equip==='dumbbell'?'🏋️ Dumbbell':'🤸 Bodyweight')+' · '+ex.desc;
+  var progText='';
+  if(lastLog){
+    var suggestedReps=lastLog.sets[0]?Math.min((lastLog.sets[0].reps||0)+2,30):null;
+    progText='Last session: '+lastLog.sets.length+' sets @ '+(lastLog.sets[0]?lastLog.sets[0].weight+'kg × '+lastLog.sets[0].reps+' reps':'—');
+    if(suggestedReps) progText+=' → Try: '+suggestedReps+' reps today';
+  }
+  if(pr) progText+=' 🏆 PR: '+pr.weight+'kg × '+pr.reps+' reps';
+  document.getElementById('ex-mo-prog').textContent=progText;
+  // Build set inputs
+  var defaultSets=ex.sets||3;
+  var lastWeight=lastLog&&lastLog.sets[0]?lastLog.sets[0].weight:0;
+  buildSetInputs(defaultSets,lastWeight);
+  openMo('mo-exercise');
+}
+function buildSetInputs(count,defaultWeight){
+  var html='';
+  for(var i=1;i<=count;i++){
+    html+='<div class="set-row" id="set-row-'+i+'">'
+      +'<div class="set-num">'+i+'</div>'
+      +'<input class="set-input" type="number" placeholder="kg" id="set-w-'+i+'" value="'+(defaultWeight||'')+'" min="0" max="200"/>'
+      +'<span style="color:var(--mu);font-size:.8rem">kg</span>'
+      +'<input class="set-input" type="number" placeholder="reps" id="set-r-'+i+'" min="1" max="200"/>'
+      +'<span style="color:var(--mu);font-size:.8rem">reps</span>'
+      +'<button class="btn btn-ghost btn-sm" style="padding:.28rem .5rem" onclick="markSetDone('+i+')">✓</button>'
+      +'</div>';
+  }
+  document.getElementById('ex-sets-list').innerHTML=html;
+  document.getElementById('ex-sets-list').dataset.count=count;
+}
+function addSet(){
+  var list=document.getElementById('ex-sets-list');
+  var count=parseInt(list.dataset.count||3)+1;
+  list.dataset.count=count;
+  var row=document.createElement('div');
+  row.className='set-row';row.id='set-row-'+count;
+  row.innerHTML='<div class="set-num">'+count+'</div>'
+    +'<input class="set-input" type="number" placeholder="kg" id="set-w-'+count+'" min="0" max="200"/>'
+    +'<span style="color:var(--mu);font-size:.8rem">kg</span>'
+    +'<input class="set-input" type="number" placeholder="reps" id="set-r-'+count+'" min="1" max="200"/>'
+    +'<span style="color:var(--mu);font-size:.8rem">reps</span>'
+    +'<button class="btn btn-ghost btn-sm" style="padding:.28rem .5rem" onclick="markSetDone('+count+')">✓</button>';
+  list.appendChild(row);
+}
+function removeSet(){
+  var list=document.getElementById('ex-sets-list');
+  var count=parseInt(list.dataset.count||3);
+  if(count<=1) return;
+  var row=document.getElementById('set-row-'+count);
+  if(row) list.removeChild(row);
+  list.dataset.count=count-1;
+}
+function markSetDone(setNum){
+  var row=document.getElementById('set-row-'+setNum);
+  if(row){
+    row.style.background='var(--green-lt)';
+    row.style.borderRadius='8px';
+  }
+  // Start rest timer
+  var restSecs=parseInt(document.getElementById('ex-rest-secs').value||60);
+  if(restSecs>0) startRestTimer(restSecs);
+}
+function saveExerciseSets(){
+  var list=document.getElementById('ex-sets-list');
+  var count=parseInt(list.dataset.count||3);
+  var sets=[];
+  for(var i=1;i<=count;i++){
+    var w=parseFloat(document.getElementById('set-w-'+i).value)||0;
+    var r=parseInt(document.getElementById('set-r-'+i).value)||0;
+    if(r>0) sets.push({weight:w,reps:r});
+  }
+  if(!sets.length){toast('Log at least one set with reps.');return;}
+  // Check personal records
+  var prs=loadLocal('personalRecords',{});
+  var pr=prs[_currentExercise.id];
+  var bestSet=sets.reduce(function(b,s){return (s.weight*s.reps)>(b.weight*b.reps)?s:b;},sets[0]);
+  var isNewPR=!pr||(bestSet.weight*bestSet.reps)>(pr.weight*pr.reps);
+  if(isNewPR){
+    prs[_currentExercise.id]={weight:bestSet.weight,reps:bestSet.reps,date:today()};
+    saveLocal('personalRecords',prs);
+    toast('🏆 New Personal Record! '+bestSet.weight+'kg × '+bestSet.reps+' reps');
+  }
+  // Add to active workout
+  var existing=_activeWorkout.exercises.findIndex(function(e){return e.exId===_currentExercise.id;});
+  var exData={exId:_currentExercise.id,name:_currentExercise.name,sets:sets};
+  if(existing>-1) _activeWorkout.exercises[existing]=exData;
+  else _activeWorkout.exercises.push(exData);
+  closeMo('mo-exercise');
+  if(!isNewPR) toast(esc(_currentExercise.name)+' logged! '+sets.length+' sets.');
+  // Continue sequence if template
+  if(_exCallback){var cb=_exCallback;_exCallback=null;setTimeout(cb,400);}
+  else renderStrength();
+}
+
+// ═══════════════════════════════════════════════
+// REST TIMER
+// ═══════════════════════════════════════════════
+function startRestTimer(secs){
+  clearInterval(_restInterval);
+  var el=document.getElementById('rest-timer');
+  var cd=document.getElementById('rest-countdown');
+  var remaining=secs;
+  cd.textContent=remaining;
+  el.className='rest-timer show';
+  _restInterval=setInterval(function(){
+    remaining--;
+    cd.textContent=remaining;
+    if(remaining<=0){
+      clearInterval(_restInterval);
+      el.className='rest-timer';
+      if(Notification.permission==='granted') new Notification('Rest done! 💪',{body:'Start your next set!'});
+      else toast('Rest done! Start your next set 💪');
+    }
+  },1000);
+}
+function skipRest(){
+  clearInterval(_restInterval);
+  document.getElementById('rest-timer').className='rest-timer';
+}
+
+// ═══════════════════════════════════════════════
+// FINISH WORKOUT
+// ═══════════════════════════════════════════════
+function finishWorkout(){
+  if(!_activeWorkout.exercises.length){toast('Log at least one exercise first.');return;}
+  var totalSets=_activeWorkout.exercises.reduce(function(s,e){return s+e.sets.length;},0);
+  var durationMins=_activeWorkout.startTime?Math.round((Date.now()-_activeWorkout.startTime)/60000):0;
+  document.getElementById('wd-summary').innerHTML=
+    '<div class="stat-row">'
+    +'<div class="stat-box"><div class="stat-n">'+_activeWorkout.exercises.length+'</div><div class="stat-l">Exercises</div></div>'
+    +'<div class="stat-box"><div class="stat-n">'+totalSets+'</div><div class="stat-l">Total Sets</div></div>'
+    +'<div class="stat-box"><div class="stat-n">'+durationMins+'</div><div class="stat-l">Minutes</div></div>'
+    +'</div>'
+    +'<div style="margin-top:.6rem;font-size:.83rem;color:var(--tx2)">'+_activeWorkout.exercises.map(function(e){return esc(e.name);}).join(' · ')+'</div>';
+  openMo('mo-workout-done');
+}
+function selectWorkoutFeel(btn){
+  document.querySelectorAll('#mo-workout-done .feel-btn').forEach(function(b){b.classList.remove('sel');});
+  btn.classList.add('sel');_workoutFeel=parseInt(btn.dataset.feel);
+}
+function saveWorkout(){
+  var totalSets=_activeWorkout.exercises.reduce(function(s,e){return s+e.sets.length;},0);
+  var durationMins=_activeWorkout.startTime?Math.round((Date.now()-_activeWorkout.startTime)/60000):0;
+  var workout={
+    id:Date.now(),date:today(),
+    exercises:_activeWorkout.exercises,
+    totalSets:totalSets,durationMins:durationMins,
+    feel:_workoutFeel,
+    templateName:_activeWorkout.templateName||null
+  };
+  var workouts=loadLocal('workouts',[]);
+  workouts.unshift(workout);
+  saveLocal('workouts',workouts);
+  _activeWorkout={exercises:[],startTime:null};
+  _activeMuscle=null;
+  closeMo('mo-workout-done');
+  renderStrength();
+  renderDashboard();
+  toast('Workout saved! Great job 💪');
+}
 </script>

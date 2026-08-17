@@ -212,6 +212,43 @@ select.fi{cursor:pointer}
 .macro-pill.fat{background:var(--red-lt);color:var(--red)}
 
 @media(prefers-color-scheme:dark){body:not(.light){--surf:#1a1035;--bg:#120d27;--bg2:#1f1650;--bdr:#2d2560;--bdr2:#3d3270;--tx:#f0eeff;--tx2:#b8afdb;--mu:#6b6391}}
+
+/* NUTRITION STYLES */
+.meal-section{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r);margin-bottom:.75rem;overflow:hidden}
+.meal-header{padding:.85rem 1.1rem;display:flex;align-items:center;justify-content:space-between;cursor:pointer;border-bottom:1px solid var(--bdr)}
+.meal-icon{font-size:1.2rem;margin-right:.5rem}
+.meal-title{font-weight:700;font-size:.92rem;color:var(--tx)}
+.meal-cals{font-size:.8rem;font-weight:700;color:var(--pu)}
+.meal-items{padding:.6rem .9rem}
+.food-item{display:flex;align-items:center;gap:.7rem;padding:.55rem 0;border-bottom:1px solid var(--bdr)}
+.food-item:last-child{border-bottom:none}
+.food-item-name{flex:1;font-size:.85rem;font-weight:500}
+.food-item-detail{font-size:.75rem;color:var(--mu)}
+.food-item-cal{font-size:.82rem;font-weight:700;color:var(--pu);white-space:nowrap}
+.food-del{background:none;border:none;color:var(--mu);font-size:.9rem;padding:.2rem;cursor:pointer}
+.food-del:hover{color:var(--red)}
+.search-result{padding:.75rem .9rem;border-bottom:1px solid var(--bdr);cursor:pointer;transition:background .15s}
+.search-result:hover{background:var(--bg2)}
+.search-result:last-child{border-bottom:none}
+.sr-name{font-size:.87rem;font-weight:600;color:var(--tx)}
+.sr-cat{font-size:.7rem;color:var(--mu)}
+.sr-macros{font-size:.73rem;color:var(--tx2);margin-top:.15rem}
+.day-total{background:linear-gradient(135deg,var(--pu3),var(--pu));border-radius:var(--r);padding:1rem 1.2rem;color:#fff;margin-bottom:.75rem}
+.dt-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem}
+.dt-title{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;opacity:.8}
+.dt-val{font-size:.88rem;font-weight:700}
+.dt-bar{height:6px;background:rgba(255,255,255,.25);border-radius:99px;overflow:hidden;margin-bottom:.3rem}
+.dt-bar-fill{height:100%;background:#fff;border-radius:99px;transition:width .4s}
+.macro-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.4rem;margin-top:.7rem}
+.mg-box{background:rgba(255,255,255,.15);border-radius:8px;padding:.4rem .3rem;text-align:center}
+.mg-val{font-size:.88rem;font-weight:700}
+.mg-label{font-size:.6rem;opacity:.75;text-transform:uppercase}
+.serving-chips{display:flex;gap:.35rem;flex-wrap:wrap;margin-bottom:.7rem}
+.schip{background:var(--pu-lt);color:var(--pu2);border:1px solid var(--pu-md);border-radius:6px;padding:.28rem .65rem;font-size:.74rem;font-weight:600;cursor:pointer;transition:all .15s}
+.schip:hover{background:var(--pu);color:#fff}
+.rating-row{display:flex;gap:.5rem;justify-content:center;margin-top:.5rem}
+.rating-btn{flex:1;padding:.65rem .3rem;border-radius:10px;border:2px solid var(--bdr);background:var(--bg2);cursor:pointer;transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:.2rem;font-size:.78rem;font-weight:600;color:var(--tx2)}
+.rating-btn.sel{border-color:var(--pu);background:var(--pu-lt);color:var(--pu2)}
 </style>
 </head>
 <body>
@@ -234,6 +271,7 @@ select.fi{cursor:pointer}
 <div class="page active" id="pg-dashboard"></div>
 <div class="page" id="pg-walk"></div>
 <div class="page" id="pg-fasting"></div>
+<div class="page" id="pg-nutrition"></div>
 <div class="page" id="pg-body"></div>
 
 <!-- BOTTOM NAV -->
@@ -246,6 +284,9 @@ select.fi{cursor:pointer}
   </button>
   <button class="nav-item" data-page="fasting" onclick="switchPage('fasting')">
     <span class="nav-icon">⏱️</span><span class="nav-label">Fast</span>
+  </button>
+  <button class="nav-item" data-page="nutrition" onclick="switchPage('nutrition')">
+    <span class="nav-icon">🥗</span><span class="nav-label">Nutrition</span>
   </button>
   <button class="nav-item" data-page="body" onclick="switchPage('body')">
     <span class="nav-icon">📊</span><span class="nav-label">Body</span>
@@ -435,6 +476,9 @@ var S={
   currentPage:'dashboard',
   // Walk state
   walkActive:false,walkMap:null,walkRoute:[],walkStart:null,walkTimer:null,walkDist:0,walkWatcher:null,
+  // Nutrition
+  mealLog:[],  // today's meals
+  nutritionHistory:[],  // all days
   // Feel selections
   walkFeel:3,sleepQ:3,
 };
@@ -531,6 +575,8 @@ function loadAll(){
   S.settings=loadLocal('settings',S.settings);
   // Water today
   S.waterToday=S.waterLog.filter(function(w){return w.date===today();}).reduce(function(s,w){return s+w.ml;},0);
+  // Meal log (today)
+  S.mealLog=loadLocal('mealLog',[]);
 }
 
 // ═══════════════════════════════════════════════
@@ -572,6 +618,7 @@ function renderPage(page){
   if(page==='dashboard') renderDashboard();
   else if(page==='walk') renderWalk();
   else if(page==='fasting') renderFasting();
+  else if(page==='nutrition') renderNutrition();
   else if(page==='body') renderBody();
 }
 function renderAll(){renderPage(S.currentPage);}
@@ -625,6 +672,8 @@ function renderDashboard(){
     +'<span class="qa-icon">🚶</span><span class="qa-label">Log Walk</span><span class="qa-sub">Track a walk</span></button>'
     +'<button class="qa-btn" onclick="openMo(\'mo-water\')">'
     +'<span class="qa-icon">💧</span><span class="qa-label">Log Water</span><span class="qa-sub">'+(S.waterToday/1000).toFixed(1)+'L / '+(S.settings.waterTarget/1000)+'L</span></button>'
+    +'<button class="qa-btn" onclick="switchPage(\'nutrition\')">'
+    +'<span class="qa-icon">🥗</span><span class="qa-label">Log Meal</span><span class="qa-sub">'+Math.round(dayTotals().cal)+' / '+S.settings.cals+' kcal</span></button>'
     +'<button class="qa-btn" onclick="openMo(\'mo-sleep\')">'
     +'<span class="qa-icon">😴</span><span class="qa-label">Log Sleep</span><span class="qa-sub">Last night\'s rest</span></button>'
     +'<button class="qa-btn" onclick="openMo(\'mo-weight\')">'
@@ -1290,5 +1339,515 @@ function initFastModal(){
   });
 })();
 </script>
+
+<!-- ADD FOOD TO MEAL MODAL -->
+<div class="mo" id="mo-add-food">
+<div class="mo-box" style="max-height:92vh">
+  <div class="mo-handle"></div>
+  <div class="mo-title" id="af-title">Add Food</div>
+  <div style="display:flex;gap:.5rem;margin-bottom:.75rem">
+    <input class="fi" id="food-search" placeholder="Search food... (e.g. fufu, eggs, rice)" style="flex:1" oninput="searchFood(this.value)"/>
+    <button class="btn btn-ghost btn-sm" onclick="searchOnline()">🌐</button>
+  </div>
+  <!-- Category filter -->
+  <div style="display:flex;gap:.3rem;overflow-x:auto;padding-bottom:.4rem;margin-bottom:.5rem;scrollbar-width:none">
+    <button class="schip" onclick="filterCat('all')">All</button>
+    <button class="schip" onclick="filterCat('gh-staple')">🇬🇭 Staples</button>
+    <button class="schip" onclick="filterCat('gh-street')">🍢 Street</button>
+    <button class="schip" onclick="filterCat('protein')">🥩 Protein</button>
+    <button class="schip" onclick="filterCat('drink')">🥤 Drinks</button>
+    <button class="schip" onclick="filterCat('intl')">🌍 Other</button>
+  </div>
+  <div id="food-search-results" style="max-height:280px;overflow-y:auto;border:1px solid var(--bdr);border-radius:10px;background:var(--surf)"></div>
+</div>
+</div>
+
+<!-- FOOD PORTION MODAL -->
+<div class="mo" id="mo-food-portion">
+<div class="mo-box">
+  <div class="mo-handle"></div>
+  <div class="mo-title" id="fp-name">Set Portion</div>
+  <div style="font-size:.78rem;color:var(--mu);margin-bottom:.5rem" id="fp-per100">Per 100g: — kcal</div>
+  <!-- Serving size shortcuts -->
+  <div class="fg">
+    <label>Quick servings</label>
+    <div class="serving-chips" id="fp-servings"></div>
+  </div>
+  <div class="fg">
+    <label>Or enter quantity</label>
+    <div style="display:flex;gap:.5rem;align-items:center">
+      <input class="fi" type="number" id="fp-qty" placeholder="e.g. 250" style="flex:1" oninput="updatePortionPreview()"/>
+      <select class="fi" id="fp-unit" style="width:90px" onchange="updatePortionPreview()">
+        <option value="g">grams</option>
+        <option value="piece">piece(s)</option>
+        <option value="ml">ml</option>
+        <option value="cup">cup</option>
+      </select>
+    </div>
+  </div>
+  <!-- Live preview -->
+  <div id="fp-preview" style="background:var(--bg2);border-radius:10px;padding:.8rem;margin-bottom:1rem;text-align:center;display:none">
+    <div style="font-size:1.3rem;font-weight:700;color:var(--pu)" id="fp-cals-preview">0 kcal</div>
+    <div class="macro-row" style="justify-content:center" id="fp-macro-preview"></div>
+  </div>
+  <button class="btn btn-pu btn-fw" onclick="addFoodToMeal()">Add to Meal</button>
+</div>
+</div>
+
+<!-- DAY RATING MODAL -->
+<div class="mo" id="mo-day-rating">
+<div class="mo-box" style="max-width:380px">
+  <div class="mo-handle"></div>
+  <div class="mo-title">How did you eat today?</div>
+  <div class="rating-row">
+    <button class="rating-btn" data-r="poor" onclick="selectRating(this)"><span style="font-size:1.4rem">😬</span>Poor</button>
+    <button class="rating-btn" data-r="okay" onclick="selectRating(this)"><span style="font-size:1.4rem">😐</span>Okay</button>
+    <button class="rating-btn" data-r="good" onclick="selectRating(this)"><span style="font-size:1.4rem">😊</span>Good</button>
+    <button class="rating-btn" data-r="great" onclick="selectRating(this)"><span style="font-size:1.4rem">🥗</span>Great</button>
+  </div>
+  <div class="fg" style="margin-top:.85rem"><label>Any notes?</label>
+    <input class="fi" id="day-rating-notes" placeholder="e.g. Ate too much at lunch..."/>
+  </div>
+  <button class="btn btn-pu btn-fw" style="margin-top:.5rem" onclick="saveDayRating()">Save</button>
+</div>
+</div>
+
 </body>
 </html>
+<script>
+// ═══════════════════════════════════════════════
+// FOOD DATABASE — Ghanaian + International
+// All values per 100g unless noted
+// {name, cat, cal, pro, carb, fat, fib, servings:[{label,g}]}
+// ═══════════════════════════════════════════════
+var FOODS=[
+  // ── GHANAIAN STAPLES ──
+  {id:'fufu',name:'Fufu (Cassava & Plantain)',cat:'gh-staple',cal:142,pro:1.2,carb:34,fat:0.3,fib:1.8,
+    servings:[{l:'Small ball',g:250},{l:'Medium ball',g:350},{l:'Large ball',g:500}]},
+  {id:'banku',name:'Banku',cat:'gh-staple',cal:170,pro:2.1,carb:38,fat:0.4,fib:1.5,
+    servings:[{l:'1 wrap (small)',g:250},{l:'1 wrap (medium)',g:350},{l:'1 wrap (large)',g:450}]},
+  {id:'kenkey-ga',name:'Kenkey (Ga/Fante)',cat:'gh-staple',cal:175,pro:2.4,carb:38,fat:0.8,fib:2.1,
+    servings:[{l:'Half kenkey',g:200},{l:'1 full kenkey',g:400}]},
+  {id:'waakye',name:'Waakye (Rice & Beans)',cat:'gh-staple',cal:148,pro:6.2,carb:27,fat:1.5,fib:3.4,
+    servings:[{l:'Small plate',g:250},{l:'Medium plate',g:400},{l:'Large plate',g:550}]},
+  {id:'jollof',name:'Jollof Rice (Ghanaian)',cat:'gh-staple',cal:165,pro:3.8,carb:30,fat:4.2,fib:1.2,
+    servings:[{l:'Small plate',g:200},{l:'Medium plate',g:350},{l:'Large plate',g:500}]},
+  {id:'fried-rice',name:'Fried Rice (Ghanaian)',cat:'gh-staple',cal:180,pro:4.5,carb:28,fat:6.1,fib:1.4,
+    servings:[{l:'Small plate',g:200},{l:'Medium plate',g:350},{l:'Large plate',g:500}]},
+  {id:'tuo-zaafi',name:'Tuo Zaafi (TZ)',cat:'gh-staple',cal:135,pro:1.8,carb:30,fat:0.5,fib:2.2,
+    servings:[{l:'Small portion',g:300},{l:'Medium portion',g:450}]},
+  {id:'ampesi',name:'Yam (Ampesi)',cat:'gh-staple',cal:118,pro:1.5,carb:27,fat:0.2,fib:1.7,
+    servings:[{l:'2 pieces',g:200},{l:'3 pieces',g:300},{l:'4 pieces',g:400}]},
+  {id:'plantain-boiled',name:'Plantain (Boiled)',cat:'gh-staple',cal:122,pro:1.3,carb:31,fat:0.4,fib:2.3,
+    servings:[{l:'Half plantain',g:100},{l:'1 plantain',g:200}]},
+  {id:'rice-white',name:'White Rice (cooked)',cat:'gh-staple',cal:130,pro:2.7,carb:28,fat:0.3,fib:0.4,
+    servings:[{l:'Small cup',g:150},{l:'Medium cup',g:250},{l:'Large cup',g:350}]},
+  {id:'cocoyam',name:'Cocoyam (Boiled)',cat:'gh-staple',cal:112,pro:1.7,carb:26,fat:0.2,fib:2.1,
+    servings:[{l:'2 pieces',g:150},{l:'3 pieces',g:230}]},
+  {id:'kontomire',name:'Kontomire Stew',cat:'gh-staple',cal:95,pro:4.2,carb:6,fat:6.5,fib:3.1,
+    servings:[{l:'Small bowl',g:150},{l:'Medium bowl',g:250}]},
+  {id:'groundnut-soup',name:'Groundnut Soup',cat:'gh-staple',cal:185,pro:7.8,carb:8,fat:14.5,fib:2.8,
+    servings:[{l:'Small bowl',g:200},{l:'Medium bowl',g:350}]},
+  {id:'palm-soup',name:'Palm Nut Soup',cat:'gh-staple',cal:175,pro:6.5,carb:7,fat:14,fib:2.1,
+    servings:[{l:'Small bowl',g:200},{l:'Medium bowl',g:350}]},
+  {id:'light-soup',name:'Light Soup (Ghanaian)',cat:'gh-staple',cal:68,pro:5.2,carb:6,fat:2.4,fib:1.5,
+    servings:[{l:'Small bowl',g:200},{l:'Medium bowl',g:350}]},
+  {id:'okro-soup',name:'Okro Soup',cat:'gh-staple',cal:88,pro:4.8,carb:8,fat:4.8,fib:3.5,
+    servings:[{l:'Small bowl',g:200},{l:'Medium bowl',g:300}]},
+  {id:'abom',name:'Abom (Pounded Yam)',cat:'gh-staple',cal:125,pro:1.6,carb:29,fat:0.3,fib:1.9,
+    servings:[{l:'Small ball',g:250},{l:'Medium ball',g:380}]},
+  {id:'omotuo',name:'Omotuo (Rice Balls)',cat:'gh-staple',cal:130,pro:2.5,carb:28,fat:0.4,fib:0.5,
+    servings:[{l:'1 ball',g:150},{l:'2 balls',g:300}]},
+  {id:'red-red',name:'Red Red (Beans & Plantain)',cat:'gh-staple',cal:188,pro:7.5,carb:32,fat:4.8,fib:6.2,
+    servings:[{l:'Small plate',g:250},{l:'Medium plate',g:400}]},
+
+  // ── GHANAIAN STREET FOOD ──
+  {id:'kelewele',name:'Kelewele (Spiced Plantain)',cat:'gh-street',cal:195,pro:1.4,carb:38,fat:5.8,fib:2.5,
+    servings:[{l:'Small portion',g:100},{l:'Medium portion',g:180},{l:'Large portion',g:280}]},
+  {id:'koose',name:'Koose (Bean Fritters)',cat:'gh-street',cal:285,pro:10.5,carb:22,fat:18,fib:4.2,
+    servings:[{l:'1 piece',g:45},{l:'2 pieces',g:90},{l:'3 pieces',g:135}]},
+  {id:'bofrot',name:'Bofrot (Puff Puff)',cat:'gh-street',cal:310,pro:5.2,carb:38,fat:15,fib:1.2,
+    servings:[{l:'1 piece',g:50},{l:'2 pieces',g:100},{l:'4 pieces',g:200}]},
+  {id:'chin-chin',name:'Chin Chin',cat:'gh-street',cal:468,pro:9.8,carb:60,fat:22,fib:2.1,
+    servings:[{l:'Small handful',g:50},{l:'Medium pack',g:100}]},
+  {id:'roasted-plantain',name:'Roasted Plantain (Kaklo)',cat:'gh-street',cal:145,pro:1.5,carb:35,fat:0.8,fib:2.8,
+    servings:[{l:'Half plantain',g:100},{l:'1 plantain',g:200}]},
+  {id:'gari',name:'Gari (Cassava Flakes)',cat:'gh-street',cal:357,pro:1.5,carb:84,fat:1.2,fib:4.3,
+    servings:[{l:'Quarter cup dry',g:50},{l:'Half cup dry',g:100}]},
+  {id:'roasted-corn',name:'Roasted Corn (Maize)',cat:'gh-street',cal:154,pro:4.8,carb:32,fat:2.1,fib:4.5,
+    servings:[{l:'1 small cob',g:100},{l:'1 large cob',g:160}]},
+  {id:'meat-pie',name:'Meat Pie (Ghanaian)',cat:'gh-street',cal:295,pro:8.5,carb:32,fat:15,fib:1.8,
+    servings:[{l:'1 pie',g:150}]},
+  {id:'spring-roll',name:'Spring Roll',cat:'gh-street',cal:260,pro:6.8,carb:28,fat:14,fib:2.1,
+    servings:[{l:'1 roll',g:85}]},
+  {id:'koko',name:'Koko (Fermented Porridge)',cat:'gh-street',cal:62,pro:1.5,carb:13,fat:0.4,fib:0.8,
+    servings:[{l:'1 cup',g:250},{l:'Large bowl',g:400}]},
+  {id:'fried-yam',name:'Fried Yam',cat:'gh-street',cal:195,pro:2.2,carb:30,fat:8,fib:2.1,
+    servings:[{l:'Small plate',g:150},{l:'Medium plate',g:250}]},
+
+  // ── PROTEINS ──
+  {id:'tilapia-grilled',name:'Tilapia (Grilled)',cat:'protein',cal:128,pro:26,carb:0,fat:2.7,fib:0,
+    servings:[{l:'Small fish',g:150},{l:'Medium fish',g:250},{l:'Large fish',g:350}]},
+  {id:'tilapia-fried',name:'Tilapia (Fried)',cat:'protein',cal:195,pro:24,carb:2,fat:10,fib:0,
+    servings:[{l:'Small fish',g:150},{l:'Medium fish',g:250}]},
+  {id:'chicken-grilled',name:'Chicken (Grilled, no skin)',cat:'protein',cal:165,pro:31,carb:0,fat:3.6,fib:0,
+    servings:[{l:'1 thigh',g:120},{l:'1 breast',g:175},{l:'1 drumstick',g:90}]},
+  {id:'chicken-fried',name:'Chicken (Fried)',cat:'protein',cal:250,pro:26,carb:8,fat:14,fib:0.4,
+    servings:[{l:'1 piece',g:120},{l:'2 pieces',g:240}]},
+  {id:'beef-cooked',name:'Beef (Cooked/Stewed)',cat:'protein',cal:218,pro:26,carb:0,fat:12,fib:0,
+    servings:[{l:'Small portion',g:100},{l:'Medium portion',g:150}]},
+  {id:'eggs',name:'Eggs (Boiled/Fried)',cat:'protein',cal:155,pro:13,carb:1.1,fat:11,fib:0,
+    servings:[{l:'1 egg',g:55},{l:'2 eggs',g:110},{l:'3 eggs',g:165}]},
+  {id:'sardines-tin',name:'Sardines (Tinned)',cat:'protein',cal:208,pro:24.6,carb:0,fat:11.5,fib:0,
+    servings:[{l:'Half tin',g:60},{l:'1 tin',g:120}]},
+  {id:'tuna-tin',name:'Tuna (Tinned in water)',cat:'protein',cal:116,pro:25.5,carb:0,fat:1,fib:0,
+    servings:[{l:'Half tin',g:80},{l:'1 tin',g:160}]},
+  {id:'mackerel',name:'Mackerel (Smoked/Dried)',cat:'protein',cal:262,pro:24,carb:0,fat:17,fib:0,
+    servings:[{l:'Small piece',g:50},{l:'Medium piece',g:100}]},
+  {id:'beans-cooked',name:'Cowpeas / Beans (Cooked)',cat:'protein',cal:127,pro:8.7,carb:22,fat:0.5,fib:6.5,
+    servings:[{l:'Small cup',g:150},{l:'Medium cup',g:250}]},
+  {id:'egg-pork',name:'Pork (Cooked)',cat:'protein',cal:242,pro:27,carb:0,fat:14,fib:0,
+    servings:[{l:'Small portion',g:100},{l:'Medium portion',g:150}]},
+
+  // ── DRINKS ──
+  {id:'sobolo',name:'Sobolo (Hibiscus Drink)',cat:'drink',cal:48,pro:0.3,carb:12,fat:0.1,fib:0.2,
+    servings:[{l:'Small cup (200ml)',g:200},{l:'Large cup (400ml)',g:400},{l:'Bottle (500ml)',g:500}]},
+  {id:'milo',name:'Milo (with milk & water)',cat:'drink',cal:88,pro:3.2,carb:14,fat:2.4,fib:0.5,
+    servings:[{l:'1 mug (250ml)',g:250}]},
+  {id:'water',name:'Water',cat:'drink',cal:0,pro:0,carb:0,fat:0,fib:0,
+    servings:[{l:'1 glass (250ml)',g:250},{l:'1 bottle (500ml)',g:500},{l:'1 litre',g:1000}]},
+  {id:'fresh-juice',name:'Fresh Fruit Juice',cat:'drink',cal:45,pro:0.7,carb:11,fat:0.2,fib:0.3,
+    servings:[{l:'Small cup',g:200},{l:'Large cup',g:400}]},
+  {id:'malta',name:'Malta Guinness',cat:'drink',cal:72,pro:1.2,carb:17,fat:0,fib:0,
+    servings:[{l:'1 bottle (330ml)',g:330}]},
+  {id:'coconut-water',name:'Coconut Water',cat:'drink',cal:19,pro:0.7,carb:3.7,fat:0.2,fib:1.1,
+    servings:[{l:'1 medium coconut',g:250},{l:'1 large coconut',g:400}]},
+  {id:'milk-evap',name:'Evaporated Milk',cat:'drink',cal:134,pro:6.8,carb:10,fat:7.6,fib:0,
+    servings:[{l:'2 tablespoons',g:30},{l:'Quarter tin',g:100}]},
+  {id:'zobo-peak',name:'Peak Milk (full cream)',cat:'drink',cal:61,pro:3.2,carb:4.8,fat:3.3,fib:0,
+    servings:[{l:'1 glass (250ml)',g:250}]},
+
+  // ── INTERNATIONAL / COMMON ──
+  {id:'bread-white',name:'White Bread',cat:'intl',cal:265,pro:9,carb:49,fat:3.2,fib:2.7,
+    servings:[{l:'1 slice',g:30},{l:'2 slices',g:60},{l:'3 slices',g:90}]},
+  {id:'bread-whole',name:'Wholemeal Bread',cat:'intl',cal:247,pro:11,carb:41,fat:3.4,fib:7.4,
+    servings:[{l:'1 slice',g:30},{l:'2 slices',g:60}]},
+  {id:'oats',name:'Oats (Cooked)',cat:'intl',cal:71,pro:2.5,carb:12,fat:1.5,fib:1.7,
+    servings:[{l:'Small bowl',g:200},{l:'Large bowl',g:350}]},
+  {id:'pasta-cooked',name:'Pasta (Cooked)',cat:'intl',cal:158,pro:5.8,carb:31,fat:0.9,fib:1.8,
+    servings:[{l:'Small plate',g:150},{l:'Medium plate',g:250}]},
+  {id:'avocado',name:'Avocado (Pear)',cat:'intl',cal:160,pro:2,carb:8.5,fat:14.7,fib:6.7,
+    servings:[{l:'Half avocado',g:80},{l:'1 whole avocado',g:160}]},
+  {id:'banana',name:'Banana',cat:'intl',cal:89,pro:1.1,carb:23,fat:0.3,fib:2.6,
+    servings:[{l:'1 small banana',g:80},{l:'1 medium banana',g:120}]},
+  {id:'orange',name:'Orange',cat:'intl',cal:47,pro:0.9,carb:12,fat:0.1,fib:2.4,
+    servings:[{l:'1 medium orange',g:130}]},
+  {id:'mango',name:'Mango',cat:'intl',cal:60,pro:0.8,carb:15,fat:0.4,fib:1.6,
+    servings:[{l:'Half mango',g:100},{l:'1 mango',g:200}]},
+  {id:'groundnuts',name:'Groundnuts (Peanuts)',cat:'intl',cal:567,pro:25.8,carb:16,fat:49.2,fib:8.5,
+    servings:[{l:'Small handful',g:30},{l:'Medium handful',g:60}]},
+  {id:'tomatoes',name:'Tomatoes (Fresh)',cat:'intl',cal:18,pro:0.9,carb:3.9,fat:0.2,fib:1.2,
+    servings:[{l:'1 medium tomato',g:100},{l:'2 tomatoes',g:200}]},
+  {id:'onion',name:'Onion',cat:'intl',cal:40,pro:1.1,carb:9.3,fat:0.1,fib:1.7,
+    servings:[{l:'Half onion',g:50},{l:'1 onion',g:100}]},
+  {id:'palm-oil',name:'Palm Oil',cat:'intl',cal:884,pro:0,carb:0,fat:100,fib:0,
+    servings:[{l:'1 tablespoon',g:14},{l:'2 tablespoons',g:28}]},
+  {id:'veg-oil',name:'Vegetable Oil',cat:'intl',cal:884,pro:0,carb:0,fat:100,fib:0,
+    servings:[{l:'1 tablespoon',g:14},{l:'2 tablespoons',g:28}]},
+  {id:'yogurt',name:'Yogurt (plain)',cat:'intl',cal:59,pro:3.5,carb:4.7,fat:3.3,fib:0,
+    servings:[{l:'Small cup',g:150},{l:'Large cup',g:250}]},
+];
+
+// ═══════════════════════════════════════════════
+// NUTRITION STATE HELPERS
+// ═══════════════════════════════════════════════
+var _activeMealType=null;
+var _selectedFood=null;
+var _dayRating=null;
+
+function todayMeals(){
+  var today_str=today();
+  return (loadLocal('mealLog',[])).filter(function(m){return m.date===today_str;});
+}
+function allMealLogs(){return loadLocal('mealLog',[]);}
+
+function getMealsByType(type){
+  return todayMeals().filter(function(m){return m.mealType===type;});
+}
+function mealMacros(items){
+  return items.reduce(function(t,m){
+    return {cal:t.cal+(m.cal||0),pro:t.pro+(m.pro||0),carb:t.carb+(m.carb||0),fat:t.fat+(m.fat||0),fib:t.fib+(m.fib||0)};
+  },{cal:0,pro:0,carb:0,fat:0,fib:0});
+}
+function dayTotals(){
+  var meals=todayMeals();
+  return mealMacros(meals);
+}
+
+// ═══════════════════════════════════════════════
+// RENDER NUTRITION PAGE
+// ═══════════════════════════════════════════════
+function renderNutrition(){
+  document.getElementById('topbar-main').textContent='Nutrition 🥗';
+  document.getElementById('topbar-sub').textContent='Track what fuels your temple';
+  var totals=dayTotals();
+  var calsTarget=S.settings.cals||2100;
+  var calsPct=Math.min(Math.round((totals.cal/calsTarget)*100),100);
+  var meals=[
+    {type:'breakfast',icon:'🌅',label:'Breakfast'},
+    {type:'lunch',icon:'☀️',label:'Lunch'},
+    {type:'dinner',icon:'🌙',label:'Dinner'},
+    {type:'snacks',icon:'🍎',label:'Snacks'},
+  ];
+  var mealHTML=meals.map(function(m){
+    var items=getMealsByType(m.type);
+    var mac=mealMacros(items);
+    var itemHTML=items.length?items.map(function(it){
+      return '<div class="food-item">'
+        +'<div style="flex:1"><div class="food-item-name">'+esc(it.name)+'</div>'
+        +'<div class="food-item-detail">'+it.qty_g+'g · P:'+it.pro.toFixed(1)+'g C:'+it.carb.toFixed(1)+'g F:'+it.fat.toFixed(1)+'g</div></div>'
+        +'<div class="food-item-cal">'+Math.round(it.cal)+' kcal</div>'
+        +'<button class="food-del" onclick="removeMealItem(\''+it.id+'\')">✕</button>'
+        +'</div>';
+    }).join(''):'';
+    return '<div class="meal-section">'
+      +'<div class="meal-header" onclick="toggleMealSection(\'ms-'+m.type+'\')">'
+      +'<div><span class="meal-icon">'+m.icon+'</span><span class="meal-title">'+m.label+'</span></div>'
+      +'<div style="display:flex;align-items:center;gap:.6rem">'
+      +(mac.cal>0?'<span class="meal-cals">'+Math.round(mac.cal)+' kcal</span>':'')
+      +'<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openAddFood(\''+m.type+'\')">+ Add</button>'
+      +'</div></div>'
+      +'<div class="meal-items" id="ms-'+m.type+'" style="display:'+(items.length?'block':'none')+'">'
+      +itemHTML
+      +(mac.cal>0?'<div class="macro-row" style="margin-top:.4rem">'
+        +'<span class="macro-pill cal">'+Math.round(mac.cal)+' kcal</span>'
+        +'<span class="macro-pill pro">P '+mac.pro.toFixed(1)+'g</span>'
+        +'<span class="macro-pill carb">C '+mac.carb.toFixed(1)+'g</span>'
+        +'<span class="macro-pill fat">F '+mac.fat.toFixed(1)+'g</span>'
+        +(mac.fib>0?'<span class="macro-pill">🌾 '+mac.fib.toFixed(1)+'g</span>':'')
+        +'</div>':'')
+      +'</div>'
+      +'</div>';
+  }).join('');
+
+  // Get today's rating
+  var todayRating=loadLocal('dayRatings',{})[today()];
+
+  document.getElementById('pg-nutrition').innerHTML=
+    // Day totals bar
+    '<div class="day-total">'
+    +'<div class="dt-row"><span class="dt-title">Today\'s Calories</span>'
+    +'<span class="dt-val">'+Math.round(totals.cal)+' / '+calsTarget+' kcal</span></div>'
+    +'<div class="dt-bar"><div class="dt-bar-fill" style="width:'+calsPct+'%"></div></div>'
+    +'<div class="macro-grid">'
+    +'<div class="mg-box"><div class="mg-val">'+totals.pro.toFixed(1)+'g</div><div class="mg-label">Protein</div></div>'
+    +'<div class="mg-box"><div class="mg-val">'+totals.carb.toFixed(1)+'g</div><div class="mg-label">Carbs</div></div>'
+    +'<div class="mg-box"><div class="mg-val">'+totals.fat.toFixed(1)+'g</div><div class="mg-label">Fat</div></div>'
+    +'<div class="mg-box"><div class="mg-val">'+totals.fib.toFixed(1)+'g</div><div class="mg-label">Fibre</div></div>'
+    +'</div></div>'
+    // Meals
+    +mealHTML
+    // Day rating
+    +'<div class="card" style="text-align:center">'
+    +(todayRating
+      ?'<div style="font-size:.85rem;color:var(--tx2)">Today\'s eating rating: '
+        +{poor:'😬 Poor',okay:'😐 Okay',good:'😊 Good',great:'🥗 Great'}[todayRating.r]+'</div>'
+        +'<button class="btn btn-ghost btn-sm" style="margin-top:.5rem" onclick="openMo(\'mo-day-rating\')">Change rating</button>'
+      :'<div style="font-size:.84rem;color:var(--mu);margin-bottom:.6rem">How did you eat today?</div>'
+        +'<button class="btn btn-ghost" onclick="openMo(\'mo-day-rating\')">⭐ Rate today\'s eating</button>'
+    )+'</div>';
+
+  // Populate food search with all foods initially
+  setTimeout(function(){renderFoodList(FOODS);},50);
+}
+
+function toggleMealSection(id){
+  var el=document.getElementById(id);
+  if(el) el.style.display=el.style.display==='none'?'block':'none';
+}
+
+// ═══════════════════════════════════════════════
+// FOOD SEARCH & FILTER
+// ═══════════════════════════════════════════════
+var _currentCat='all';
+function openAddFood(mealType){
+  _activeMealType=mealType;
+  var labels={breakfast:'Breakfast',lunch:'Lunch',dinner:'Dinner',snacks:'Snacks'};
+  document.getElementById('af-title').textContent='Add to '+labels[mealType];
+  document.getElementById('food-search').value='';
+  _currentCat='all';
+  renderFoodList(FOODS);
+  openMo('mo-add-food');
+}
+function filterCat(cat){
+  _currentCat=cat;
+  var q=document.getElementById('food-search').value.trim();
+  var list=cat==='all'?FOODS:FOODS.filter(function(f){return f.cat===cat;});
+  if(q) list=list.filter(function(f){return f.name.toLowerCase().includes(q.toLowerCase());});
+  renderFoodList(list);
+}
+function searchFood(q){
+  var list=_currentCat==='all'?FOODS:FOODS.filter(function(f){return f.cat===_currentCat;});
+  if(q) list=list.filter(function(f){return f.name.toLowerCase().includes(q.toLowerCase());});
+  renderFoodList(list);
+}
+function renderFoodList(list){
+  var el=document.getElementById('food-search-results');
+  if(!el) return;
+  if(!list.length){
+    el.innerHTML='<div style="padding:1.2rem;text-align:center;color:var(--mu);font-size:.85rem">No foods found.<br>Try the 🌐 button to search online.</div>';
+    return;
+  }
+  el.innerHTML=list.slice(0,30).map(function(f){
+    var catLabel={
+      'gh-staple':'🇬🇭 Ghanaian Staple','gh-street':'🍢 Street Food',
+      'protein':'🥩 Protein','drink':'🥤 Drink','intl':'🌍 Other'
+    }[f.cat]||f.cat;
+    return '<div class="search-result" onclick="openPortion(\''+f.id+'\')">'
+      +'<div class="sr-name">'+esc(f.name)+'</div>'
+      +'<div class="sr-cat">'+catLabel+'</div>'
+      +'<div class="sr-macros">'+f.cal+' kcal · P:'+f.pro+'g · C:'+f.carb+'g · F:'+f.fat+'g per 100g</div>'
+      +'</div>';
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════
+// ONLINE FOOD SEARCH (Open Food Facts)
+// ═══════════════════════════════════════════════
+async function searchOnline(){
+  var q=document.getElementById('food-search').value.trim();
+  if(!q){toast('Type a food name to search online.');return;}
+  var el=document.getElementById('food-search-results');
+  el.innerHTML='<div style="padding:1rem;text-align:center;color:var(--mu)">🌐 Searching...</div>';
+  try{
+    var r=await fetch('https://world.openfoodfacts.org/cgi/search.pl?search_terms='+encodeURIComponent(q)+'&search_simple=1&action=process&json=1&page_size=10&fields=product_name,nutriments,serving_size');
+    var d=await r.json();
+    var products=(d.products||[]).filter(function(p){
+      return p.product_name&&p.nutriments&&p.nutriments['energy-kcal_100g'];
+    });
+    if(!products.length){el.innerHTML='<div style="padding:1rem;text-align:center;color:var(--mu)">No results found online.</div>';return;}
+    el.innerHTML=products.slice(0,10).map(function(p){
+      var n=p.nutriments;
+      var cal=Math.round(n['energy-kcal_100g']||0);
+      var pro=+(n['proteins_100g']||0).toFixed(1);
+      var carb=+(n['carbohydrates_100g']||0).toFixed(1);
+      var fat=+(n['fat_100g']||0).toFixed(1);
+      var fib=+(n['fiber_100g']||0).toFixed(1);
+      return '<div class="search-result" onclick="openPortionOnline(\''+encodeURIComponent(p.product_name)+'\','+cal+','+pro+','+carb+','+fat+','+fib+')">'
+        +'<div class="sr-name">'+esc(p.product_name)+'</div>'
+        +'<div class="sr-cat">🌐 Open Food Facts</div>'
+        +'<div class="sr-macros">'+cal+' kcal · P:'+pro+'g · C:'+carb+'g · F:'+fat+'g per 100g</div>'
+        +'</div>';
+    }).join('');
+  }catch(e){el.innerHTML='<div style="padding:1rem;text-align:center;color:var(--mu)">Search failed. Check your connection.</div>';}
+}
+
+// ═══════════════════════════════════════════════
+// PORTION SELECTION
+// ═══════════════════════════════════════════════
+function openPortion(foodId){
+  var f=FOODS.find(function(x){return x.id===foodId;});
+  if(!f) return;
+  _selectedFood={id:foodId+'_'+Date.now(),foodId:foodId,name:f.name,
+    cal100:f.cal,pro100:f.pro,carb100:f.carb,fat100:f.fat,fib100:f.fib,
+    servings:f.servings||[]};
+  document.getElementById('fp-name').textContent=f.name;
+  document.getElementById('fp-per100').textContent='Per 100g: '+f.cal+' kcal · P:'+f.pro+'g · C:'+f.carb+'g · F:'+f.fat+'g';
+  document.getElementById('fp-qty').value='';
+  document.getElementById('fp-unit').value='g';
+  document.getElementById('fp-preview').style.display='none';
+  // Serving chips
+  var chips=(f.servings||[]).map(function(s){
+    return '<button class="schip" onclick="useServing('+s.g+')">'+esc(s.l)+' ('+s.g+'g)</button>';
+  }).join('');
+  document.getElementById('fp-servings').innerHTML=chips||'<span style="font-size:.78rem;color:var(--mu)">Enter grams below</span>';
+  closeMo('mo-add-food');
+  openMo('mo-food-portion');
+}
+function openPortionOnline(nameEnc,cal,pro,carb,fat,fib){
+  var name=decodeURIComponent(nameEnc);
+  _selectedFood={id:'online_'+Date.now(),foodId:'online',name:name,
+    cal100:cal,pro100:pro,carb100:carb,fat100:fat,fib100:fib,servings:[]};
+  document.getElementById('fp-name').textContent=name;
+  document.getElementById('fp-per100').textContent='Per 100g: '+cal+' kcal · P:'+pro+'g · C:'+carb+'g · F:'+fat+'g';
+  document.getElementById('fp-qty').value='100';
+  document.getElementById('fp-unit').value='g';
+  document.getElementById('fp-servings').innerHTML='<span style="font-size:.78rem;color:var(--mu)">Enter your portion in grams</span>';
+  updatePortionPreview();
+  closeMo('mo-add-food');
+  openMo('mo-food-portion');
+}
+function useServing(grams){
+  document.getElementById('fp-qty').value=grams;
+  document.getElementById('fp-unit').value='g';
+  updatePortionPreview();
+}
+function updatePortionPreview(){
+  if(!_selectedFood) return;
+  var qty=parseFloat(document.getElementById('fp-qty').value)||0;
+  if(!qty){document.getElementById('fp-preview').style.display='none';return;}
+  var factor=qty/100;
+  var cal=Math.round(_selectedFood.cal100*factor);
+  var pro=+(_selectedFood.pro100*factor).toFixed(1);
+  var carb=+(_selectedFood.carb100*factor).toFixed(1);
+  var fat=+(_selectedFood.fat100*factor).toFixed(1);
+  var fib=+(_selectedFood.fib100*factor).toFixed(1);
+  document.getElementById('fp-cals-preview').textContent=cal+' kcal';
+  document.getElementById('fp-macro-preview').innerHTML=
+    '<span class="macro-pill pro">P '+pro+'g</span>'
+    +'<span class="macro-pill carb">C '+carb+'g</span>'
+    +'<span class="macro-pill fat">F '+fat+'g</span>'
+    +(fib>0?'<span class="macro-pill">🌾 '+fib+'g</span>':'');
+  document.getElementById('fp-preview').style.display='block';
+}
+function addFoodToMeal(){
+  if(!_selectedFood||!_activeMealType){toast('No food selected.');return;}
+  var qty=parseFloat(document.getElementById('fp-qty').value)||0;
+  if(!qty||qty<1){toast('Enter a quantity.');return;}
+  var factor=qty/100;
+  var entry={
+    id:_selectedFood.id,foodId:_selectedFood.foodId,name:_selectedFood.name,
+    mealType:_activeMealType,date:today(),qty_g:qty,
+    cal:+(_selectedFood.cal100*factor).toFixed(1),
+    pro:+(_selectedFood.pro100*factor).toFixed(1),
+    carb:+(_selectedFood.carb100*factor).toFixed(1),
+    fat:+(_selectedFood.fat100*factor).toFixed(1),
+    fib:+(_selectedFood.fib100*factor).toFixed(1),
+    loggedAt:new Date().toISOString()
+  };
+  var log=loadLocal('mealLog',[]);
+  log.push(entry);
+  saveLocal('mealLog',log);
+  closeMo('mo-food-portion');
+  renderNutrition();
+  toast(esc(_selectedFood.name)+' added to '+ _activeMealType+'!');
+  _selectedFood=null;
+}
+function removeMealItem(itemId){
+  var log=loadLocal('mealLog',[]);
+  saveLocal('mealLog',log.filter(function(m){return m.id!==itemId;}));
+  renderNutrition();
+  toast('Removed.');
+}
+
+// ═══════════════════════════════════════════════
+// DAY RATING
+// ═══════════════════════════════════════════════
+function selectRating(btn){
+  document.querySelectorAll('.rating-btn').forEach(function(b){b.classList.remove('sel');});
+  btn.classList.add('sel');_dayRating=btn.dataset.r;
+}
+function saveDayRating(){
+  if(!_dayRating){toast('Pick a rating.');return;}
+  var ratings=loadLocal('dayRatings',{});
+  ratings[today()]={r:_dayRating,notes:document.getElementById('day-rating-notes').value.trim()};
+  saveLocal('dayRatings',ratings);
+  closeMo('mo-day-rating');
+  renderNutrition();
+  toast('Eating rating saved!');
+}
+
+// ── ALSO ADD NUTRITION QUICK-LOG TO DASHBOARD ──
+// Patch dashboard renderDashboard to include nutrition link
+var _origRenderNutrQuick=renderDashboard;
+</script>

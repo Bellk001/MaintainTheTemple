@@ -280,6 +280,39 @@ select.fi{cursor:pointer}
 .ws-sets{font-size:.82rem;color:var(--tx2)}
 .muscle-chip{display:inline-flex;align-items:center;padding:.28rem .7rem;border-radius:20px;font-size:.74rem;font-weight:600;cursor:pointer;border:1.5px solid var(--bdr);background:var(--bg2);color:var(--tx2);transition:all .15s;margin:.2rem}
 .muscle-chip.active{background:var(--pu);color:#fff;border-color:var(--pu)}
+
+/* INSIGHTS STYLES */
+.insight-section{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r);padding:1.1rem 1.2rem;margin-bottom:.85rem}
+.is-title{font-family:'DM Serif Display',serif;font-size:1.05rem;color:var(--tx);margin-bottom:.8rem}
+.week-report{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.8rem}
+.wr-item{background:var(--bg2);border-radius:10px;padding:.75rem .9rem}
+.wr-label{font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mu);margin-bottom:.2rem}
+.wr-val{font-size:1.1rem;font-weight:700;color:var(--tx)}
+.wr-sub{font-size:.72rem;color:var(--mu);margin-top:.1rem}
+.progress-bar-wrap{margin-bottom:.7rem}
+.pb-label{display:flex;justify-content:space-between;font-size:.76rem;margin-bottom:.25rem}
+.pb-label span:first-child{font-weight:600;color:var(--tx)}
+.pb-label span:last-child{color:var(--mu)}
+.pb-track{height:8px;background:var(--bg2);border-radius:99px;overflow:hidden}
+.pb-fill{height:100%;border-radius:99px;transition:width .6s ease}
+.pattern-item{display:flex;gap:.75rem;padding:.65rem 0;border-bottom:1px solid var(--bdr)}
+.pattern-item:last-child{border-bottom:none}
+.pi-icon{font-size:1.2rem;flex-shrink:0;margin-top:.05rem}
+.pi-text{font-size:.84rem;color:var(--tx2);line-height:1.45}
+.pi-text strong{color:var(--tx)}
+.week-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:.3rem;margin-bottom:.5rem}
+.wc-head{font-size:.6rem;font-weight:700;text-transform:uppercase;color:var(--mu);text-align:center}
+.wc-cell{aspect-ratio:1;border-radius:6px;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:600;color:var(--mu)}
+.wc-cell.walk{background:var(--pu-lt);color:var(--pu2)}
+.wc-cell.train{background:var(--blue-lt);color:var(--blue)}
+.wc-cell.both{background:var(--pu);color:#fff}
+.wc-cell.fast{border:2px solid var(--gold)}
+.wc-cell.today-cell{box-shadow:0 0 0 2px var(--pu)}
+.streak-display{display:flex;align-items:center;gap:1rem;padding:.6rem 0}
+.sd-num{font-family:'DM Serif Display',serif;font-size:2.2rem;color:var(--pu);line-height:1}
+.sd-label{font-size:.78rem;color:var(--mu);font-weight:600}
+.sd-sub{font-size:.72rem;color:var(--tx2)}
+.chart-container{position:relative;height:160px;margin:.5rem 0}
 </style>
 </head>
 <body>
@@ -304,6 +337,7 @@ select.fi{cursor:pointer}
 <div class="page" id="pg-fasting"></div>
 <div class="page" id="pg-nutrition"></div>
 <div class="page" id="pg-strength"></div>
+<div class="page" id="pg-insights"></div>
 <div class="page" id="pg-body"></div>
 
 <!-- BOTTOM NAV -->
@@ -325,6 +359,9 @@ select.fi{cursor:pointer}
   </button>
   <button class="nav-item" data-page="body" onclick="switchPage('body')">
     <span class="nav-icon">📊</span><span class="nav-label">Body</span>
+  </button>
+  <button class="nav-item" data-page="insights" onclick="switchPage('insights')">
+    <span class="nav-icon">✨</span><span class="nav-label">Insights</span>
   </button>
 </nav>
 
@@ -655,6 +692,7 @@ function renderPage(page){
   else if(page==='fasting') renderFasting();
   else if(page==='nutrition') renderNutrition();
   else if(page==='strength') renderStrength();
+  else if(page==='insights') renderInsights();
   else if(page==='body') renderBody();
 }
 function renderAll(){renderPage(S.currentPage);}
@@ -2407,4 +2445,370 @@ function saveWorkout(){
   renderDashboard();
   toast('Workout saved! Great job 💪');
 }
+</script>
+<script>
+// ═══════════════════════════════════════════════
+// INSIGHTS & SCHEDULER — Phase 4
+// ═══════════════════════════════════════════════
+
+// ── DATA HELPERS ──
+function getLast7Days(){
+  var days=[];
+  for(var i=6;i>=0;i--){
+    var d=new Date();d.setDate(d.getDate()-i);
+    days.push(d.toISOString().split('T')[0]);
+  }
+  return days;
+}
+function getLast30Days(){
+  var days=[];
+  for(var i=29;i>=0;i--){
+    var d=new Date();d.setDate(d.getDate()-i);
+    days.push(d.toISOString().split('T')[0]);
+  }
+  return days;
+}
+function getThisWeekStats(){
+  var days=getLast7Days();
+  var walks=loadLocal('walks',[]);
+  var workouts=loadLocal('workouts',[]);
+  var fasts=loadLocal('fastHistory',[]);
+  var sleepLog=loadLocal('sleepLog',[]);
+  var mealLog=loadLocal('mealLog',[]);
+  var waterLog=loadLocal('waterLog',[]);
+  var ratings=loadLocal('dayRatings',{});
+  return {
+    walkDays:days.filter(function(d){return walks.some(function(w){return w.date===d;})}).length,
+    totalKm:walks.filter(function(w){return days.indexOf(w.date)>-1;}).reduce(function(s,w){return s+w.dist_km;},0),
+    trainDays:days.filter(function(d){return workouts.some(function(w){return w.date===d;})}).length,
+    totalSets:workouts.filter(function(w){return days.indexOf(w.date)>-1;}).reduce(function(s,w){return s+w.totalSets;},0),
+    fastDays:days.filter(function(d){return fasts.some(function(f){return f.date===d&&f.completed;})}).length,
+    avgSleep:function(){
+      var sl=sleepLog.filter(function(s){return days.indexOf(s.date)>-1;});
+      return sl.length?+(sl.reduce(function(s,x){return s+x.hrs;},0)/sl.length).toFixed(1):0;
+    }(),
+    avgCals:function(){
+      var cals=days.map(function(d){
+        var meals=mealLog.filter(function(m){return m.date===d;});
+        return meals.reduce(function(s,m){return s+m.cal;},0);
+      }).filter(function(c){return c>0;});
+      return cals.length?Math.round(cals.reduce(function(s,c){return s+c;},0)/cals.length):0;
+    }(),
+    avgWater:function(){
+      var wl=days.map(function(d){
+        return waterLog.filter(function(w){return w.date===d;}).reduce(function(s,w){return s+w.ml;},0);
+      }).filter(function(w){return w>0;});
+      return wl.length?Math.round(wl.reduce(function(s,w){return s+w;},0)/wl.length):0;
+    }(),
+    eatRatings:days.map(function(d){return ratings[d]?ratings[d].r:null;}).filter(Boolean),
+    days:days
+  };
+}
+function getStrengthProgress(){
+  var workouts=loadLocal('workouts',[]);
+  var prs=loadLocal('personalRecords',{});
+  // Per exercise: find last 5 sessions
+  var exMap={};
+  workouts.forEach(function(w){
+    w.exercises.forEach(function(e){
+      if(!exMap[e.exId]) exMap[e.exId]={name:e.name,sessions:[]};
+      var best=e.sets.reduce(function(b,s){return(s.weight*s.reps)>(b.weight*b.reps)?s:b;},{weight:0,reps:0});
+      exMap[e.exId].sessions.unshift({date:w.date,weight:best.weight,reps:best.reps});
+    });
+  });
+  return {exMap:exMap,prs:prs};
+}
+function detectPatterns(){
+  var patterns=[];
+  var walks=loadLocal('walks',[]);
+  var workouts=loadLocal('workouts',[]);
+  var sleepLog=loadLocal('sleepLog',[]);
+  var mealLog=loadLocal('mealLog',[]);
+  // Pattern 1: Consistency streak
+  var walkStreak=calcWalkStreak();
+  if(walkStreak>=3) patterns.push({icon:'🔥',text:'<strong>'+walkStreak+'-day walk streak!</strong> You\'re building a great habit. Keep it going!'});
+  // Pattern 2: Walk + sleep correlation
+  var last14=getLast30Days().slice(-14);
+  var walkDays=last14.filter(function(d){return walks.some(function(w){return w.date===d;});});
+  var noWalkDays=last14.filter(function(d){return !walks.some(function(w){return w.date===d;});});
+  var avgSleepWalk=0,avgSleepNoWalk=0,wCount=0,nwCount=0;
+  walkDays.forEach(function(d){var s=sleepLog.find(function(x){return x.date===d;});if(s){avgSleepWalk+=s.hrs;wCount++;}});
+  noWalkDays.forEach(function(d){var s=sleepLog.find(function(x){return x.date===d;});if(s){avgSleepNoWalk+=s.hrs;nwCount++;}});
+  if(wCount>2&&nwCount>2){
+    avgSleepWalk=+(avgSleepWalk/wCount).toFixed(1);
+    avgSleepNoWalk=+(avgSleepNoWalk/nwCount).toFixed(1);
+    if(avgSleepWalk>avgSleepNoWalk+0.5)
+      patterns.push({icon:'😴',text:'<strong>Sleep insight:</strong> You sleep '+avgSleepWalk+'h on walk days vs '+avgSleepNoWalk+'h on rest days. Walking improves your sleep!'});
+  }
+  // Pattern 3: Skipping days
+  var dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  var skipCounts={};
+  getLast30Days().forEach(function(d){
+    var dayIdx=new Date(d+'T00:00:00').getDay();
+    if(!workouts.some(function(w){return w.date===d;})&&!walks.some(function(w){return w.date===d;})){
+      skipCounts[dayIdx]=(skipCounts[dayIdx]||0)+1;
+    }
+  });
+  var mostSkipped=Object.keys(skipCounts).sort(function(a,b){return skipCounts[b]-skipCounts[a];})[0];
+  if(mostSkipped&&skipCounts[mostSkipped]>=3)
+    patterns.push({icon:'📅',text:'<strong>'+dayNames[mostSkipped]+'s are your toughest day</strong> — you tend to skip activity. Try scheduling something light for that day.'});
+  // Pattern 4: Calorie trend
+  var week=getThisWeekStats();
+  var target=S.settings.cals||2100;
+  if(week.avgCals>0&&week.avgCals<target*0.8)
+    patterns.push({icon:'🥗',text:'<strong>Eating below target</strong> — averaging '+week.avgCals+' kcal vs your '+target+' kcal goal. Undereating can slow muscle gain.'});
+  if(week.avgCals>target*1.2)
+    patterns.push({icon:'⚠️',text:'<strong>Eating above target</strong> — averaging '+week.avgCals+' kcal vs your '+target+' kcal goal. Consider adjusting portions.'});
+  // Pattern 5: Water
+  if(week.avgWater>0&&week.avgWater<(S.settings.waterTarget||3200)*0.7)
+    patterns.push({icon:'💧',text:'<strong>Low water intake</strong> — averaging '+(week.avgWater/1000).toFixed(1)+'L/day. Your target is '+(( S.settings.waterTarget||3200)/1000)+'L. Hydration supports fat loss.'});
+  // Pattern 6: PR count
+  var prs=loadLocal('personalRecords',{});
+  var prCount=Object.keys(prs).length;
+  if(prCount>0) patterns.push({icon:'🏆',text:'<strong>'+prCount+' personal records</strong> set so far. Your strength is growing — keep progressing the weights!'});
+  if(!patterns.length) patterns.push({icon:'💡',text:'Keep logging your activities and patterns will appear here as you build consistency over the coming days.'});
+  return patterns;
+}
+
+// ── ACTIVITY CALENDAR (last 5 weeks) ──
+function renderActivityCalendar(){
+  var walks=loadLocal('walks',[]);
+  var workouts=loadLocal('workouts',[]);
+  var fasts=loadLocal('fastHistory',[]);
+  var today_str=today();
+  var days=['M','T','W','T','F','S','S'];
+  // Get last 35 days (5 weeks)
+  var dates=[];
+  for(var i=34;i>=0;i--){var d=new Date();d.setDate(d.getDate()-i);dates.push(d.toISOString().split('T')[0]);}
+  var headHTML='<div class="week-cal-grid">'+days.map(function(d){return '<div class="wc-head">'+d+'</div>';}).join('')+'</div>';
+  var cells='<div class="week-cal-grid">';
+  dates.forEach(function(d){
+    var hasWalk=walks.some(function(w){return w.date===d;});
+    var hasTrain=workouts.some(function(w){return w.date===d;});
+    var hasFast=fasts.some(function(f){return f.date===d&&f.completed;});
+    var cls='wc-cell';
+    if(hasWalk&&hasTrain) cls+=' both';
+    else if(hasWalk) cls+=' walk';
+    else if(hasTrain) cls+=' train';
+    if(hasFast) cls+=' fast';
+    if(d===today_str) cls+=' today-cell';
+    var day=new Date(d+'T00:00:00').getDate();
+    cells+='<div class="'+cls+'" title="'+d+'">'+day+'</div>';
+  });
+  cells+='</div>';
+  return headHTML+cells
+    +'<div style="display:flex;gap:.8rem;flex-wrap:wrap;margin-top:.5rem">'
+    +'<span style="font-size:.71rem;color:var(--mu)"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--pu);margin-right:.3rem"></span>Walk+Train</span>'
+    +'<span style="font-size:.71rem;color:var(--mu)"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--pu-lt);margin-right:.3rem"></span>Walk</span>'
+    +'<span style="font-size:.71rem;color:var(--mu)"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--blue-lt);margin-right:.3rem"></span>Train</span>'
+    +'<span style="font-size:.71rem;color:var(--mu)"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;border:2px solid var(--gold);margin-right:.3rem"></span>Fasted</span>'
+    +'</div>';
+}
+
+// ── WEEKLY CHECK-IN ──
+function checkSundayCheckIn(){
+  var d=new Date();
+  if(d.getDay()!==0) return; // Only Sunday
+  var lastCheckIn=loadLocal('lastCheckIn',null);
+  if(lastCheckIn===today()) return;
+  // Show check-in prompt
+  setTimeout(function(){openWeeklyCheckIn();},1000);
+}
+function openWeeklyCheckIn(){
+  var existing=loadLocal('weeklyCheckIns',[]);
+  // Build a modal dynamically
+  var modal=document.createElement('div');
+  modal.className='mo open';modal.id='mo-weekly-checkin';
+  modal.innerHTML='<div class="mo-box"><div class="mo-handle"></div>'
+    +'<div class="mo-title">Weekly Check-in 📋</div>'
+    +'<div style="font-size:.84rem;color:var(--mu);margin-bottom:1rem">Sunday summary — how was your week?</div>'
+    +'<div class="fg"><label>Current weight (kg)</label><input class="fi" type="number" id="ci-weight" placeholder="e.g. 95.5" step="0.1"/></div>'
+    +'<div class="fg"><label>Rate your week overall</label>'
+    +'<div class="rating-row">'
+    +'<button class="rating-btn" data-r="1" onclick="ciRate(this)"><span style="font-size:1.3rem">😫</span>Tough</button>'
+    +'<button class="rating-btn" data-r="2" onclick="ciRate(this)"><span style="font-size:1.3rem">😐</span>OK</button>'
+    +'<button class="rating-btn" data-r="3" onclick="ciRate(this)"><span style="font-size:1.3rem">😊</span>Good</button>'
+    +'<button class="rating-btn" data-r="4" onclick="ciRate(this)"><span style="font-size:1.3rem">🔥</span>Great</button>'
+    +'</div></div>'
+    +'<div class="fg"><label>One focus for next week</label><input class="fi" id="ci-focus" placeholder="e.g. Be consistent with walks"/></div>'
+    +'<div class="fg"><label>Any notes?</label><input class="fi" id="ci-notes" placeholder="How did this week go..."/></div>'
+    +'<button class="btn btn-pu btn-fw" onclick="saveWeeklyCheckIn()">Save Check-in</button>'
+    +'<button class="btn btn-gray btn-fw" style="margin-top:.4rem" onclick="document.getElementById(\'mo-weekly-checkin\').remove()">Skip for now</button>'
+    +'</div>';
+  document.body.appendChild(modal);
+}
+var _ciRating=null;
+function ciRate(btn){
+  document.querySelectorAll('#mo-weekly-checkin .rating-btn').forEach(function(b){b.classList.remove('sel');});
+  btn.classList.add('sel');_ciRating=parseInt(btn.dataset.r);
+}
+function saveWeeklyCheckIn(){
+  var wt=parseFloat(document.getElementById('ci-weight').value)||null;
+  var focus=document.getElementById('ci-focus').value.trim();
+  var notes=document.getElementById('ci-notes').value.trim();
+  var checkins=loadLocal('weeklyCheckIns',[]);
+  var week=getThisWeekStats();
+  checkins.unshift({
+    date:today(),rating:_ciRating,focus:focus,notes:notes,
+    weekKm:+week.totalKm.toFixed(2),weekTrains:week.trainDays,
+    weekFasts:week.fastDays,weight:wt
+  });
+  saveLocal('weeklyCheckIns',checkins);
+  saveLocal('lastCheckIn',today());
+  if(wt){
+    var weights=loadLocal('weights',[]);
+    weights.unshift({kg:wt,date:today()});
+    saveLocal('weights',weights);S.weights=weights;
+    if(S.profile){S.profile.weight=wt;S.settings.cals=calcCalTarget(wt,S.profile.height,S.profile.age,S.profile.goal);saveLocal('profile',S.profile);saveLocal('settings',S.settings);}
+  }
+  var mo=document.getElementById('mo-weekly-checkin');
+  if(mo) mo.remove();
+  renderInsights();
+  toast('Weekly check-in saved! 🙌');
+}
+
+// ── MAIN RENDER ──
+function renderInsights(){
+  document.getElementById('topbar-main').textContent='Insights ✨';
+  document.getElementById('topbar-sub').textContent='Your progress at a glance';
+  var week=getThisWeekStats();
+  var sp=getStrengthProgress();
+  var patterns=detectPatterns();
+  var prs=loadLocal('personalRecords',{});
+  var checkIns=loadLocal('weeklyCheckIns',[]);
+  var lastCI=checkIns[0]||null;
+  var calTarget=S.settings.cals||2100;
+  var waterTarget=S.settings.waterTarget||3200;
+  var walkTarget=5; // walks per week goal
+  var trainTarget=3;
+  var fastTarget=5;
+
+  // Week report cards
+  var weekReport='<div class="week-report">'
+    +'<div class="wr-item"><div class="wr-label">Walks this week</div><div class="wr-val">'+week.walkDays+'<span style="font-size:.8rem;font-weight:400;color:var(--mu)">/7 days</span></div><div class="wr-sub">'+week.totalKm.toFixed(1)+' km total</div></div>'
+    +'<div class="wr-item"><div class="wr-label">Training sessions</div><div class="wr-val">'+week.trainDays+'<span style="font-size:.8rem;font-weight:400;color:var(--mu)">/7 days</span></div><div class="wr-sub">'+week.totalSets+' total sets</div></div>'
+    +'<div class="wr-item"><div class="wr-label">Fasts completed</div><div class="wr-val">'+week.fastDays+'</div><div class="wr-sub">this week</div></div>'
+    +'<div class="wr-item"><div class="wr-label">Avg sleep</div><div class="wr-val">'+week.avgSleep+'<span style="font-size:.8rem;font-weight:400;color:var(--mu)">h</span></div><div class="wr-sub">'+(week.avgSleep>=7?'✅ Good':'⚠️ Aim for 7–8h')+'</div></div>'
+    +'<div class="wr-item"><div class="wr-label">Avg calories</div><div class="wr-val">'+(week.avgCals||'—')+'</div><div class="wr-sub">target: '+calTarget+' kcal</div></div>'
+    +'<div class="wr-item"><div class="wr-label">Avg water</div><div class="wr-val">'+(week.avgWater?(week.avgWater/1000).toFixed(1):'—')+'<span style="font-size:.8rem;font-weight:400;color:var(--mu)">L</span></div><div class="wr-sub">target: '+(waterTarget/1000)+'L</div></div>'
+    +'</div>';
+
+  // Progress bars
+  var progressBars='';
+  function makeBar(label,val,max,unit,color){
+    var pct=Math.min(Math.round((val/max)*100),100);
+    return '<div class="progress-bar-wrap">'
+      +'<div class="pb-label"><span>'+label+'</span><span>'+val+(unit?' '+unit:'')+(max?' / '+max+(unit?' '+unit:''):'')+'</span></div>'
+      +'<div class="pb-track"><div class="pb-fill" style="width:'+pct+'%;background:'+color+'"></div></div>'
+      +'</div>';
+  }
+  progressBars+=makeBar('Walks this week',week.walkDays,walkTarget,'days','var(--pu)');
+  progressBars+=makeBar('Training sessions',week.trainDays,trainTarget,'days','var(--blue)');
+  progressBars+=makeBar('Fasts completed',week.fastDays,fastTarget,'days','var(--gold)');
+  progressBars+=makeBar('Avg daily water',(week.avgWater/1000).toFixed(1),(waterTarget/1000)+'','L','var(--green)');
+
+  // Strength PRs
+  var prHTML=Object.keys(prs).length?Object.keys(prs).slice(0,6).map(function(exId){
+    var pr=prs[exId];
+    var ex=EXERCISES.find(function(e){return e.id===exId;});
+    return '<div class="hist-item"><div class="hist-icon">🏆</div>'
+      +'<div class="hist-body"><div class="hist-title">'+(ex?ex.name:exId)+'</div>'
+      +'<div class="hist-sub">'+fmtDate(pr.date)+'</div></div>'
+      +'<div class="hist-right"><div class="hist-val">'+pr.weight+'kg × '+pr.reps+'</div></div>'
+      +'</div>';
+  }).join(''):'<div style="font-size:.84rem;color:var(--mu);padding:.5rem 0">No personal records yet. Start training!</div>';
+
+  // Weight trend
+  var weights=loadLocal('weights',[]).slice(0,8).reverse();
+  var wtTrend='';
+  if(weights.length>=2){
+    var first=weights[0].kg;var last2=weights[weights.length-1].kg;
+    var diff=+(last2-first).toFixed(1);
+    var arrow=diff<0?'▼ Lost':diff>0?'▲ Gained':'→ Maintained';
+    var col=diff<=0?'var(--green)':'var(--red)';
+    wtTrend='<div style="text-align:center;padding:.5rem 0"><span style="font-size:1.1rem;font-weight:700;color:'+col+'">'+arrow+' '+Math.abs(diff)+'kg</span>'
+      +'<div style="font-size:.76rem;color:var(--mu);margin-top:.15rem">since '+fmtDate(weights[0].date)+'</div></div>';
+  }
+
+  // Patterns
+  var patternHTML=patterns.map(function(p){
+    return '<div class="pattern-item"><div class="pi-icon">'+p.icon+'</div><div class="pi-text">'+p.text+'</div></div>';
+  }).join('');
+
+  // Last weekly check-in
+  var lastCIHTML=lastCI
+    ?'<div style="background:var(--bg2);border-radius:10px;padding:.8rem;margin-top:.5rem">'
+      +'<div style="font-size:.78rem;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:.3rem">Last Check-in — '+fmtDate(lastCI.date)+'</div>'
+      +(lastCI.focus?'<div style="font-size:.84rem;color:var(--tx);margin-bottom:.2rem">🎯 Focus: '+esc(lastCI.focus)+'</div>':'')
+      +(lastCI.notes?'<div style="font-size:.82rem;color:var(--tx2)">'+esc(lastCI.notes)+'</div>':'')
+      +'</div>'
+    :'<div style="font-size:.83rem;color:var(--mu)">No check-ins yet. Come back on Sunday!</div>';
+
+  document.getElementById('pg-insights').innerHTML=
+    // Weekly summary
+    '<div class="insight-section">'
+    +'<div class="is-title">This Week 📅</div>'
+    +weekReport
+    +'</div>'
+    // Progress bars
+    +'<div class="insight-section">'
+    +'<div class="is-title">Weekly Progress</div>'
+    +progressBars
+    +'</div>'
+    // Activity calendar
+    +'<div class="insight-section">'
+    +'<div class="is-title">Activity Calendar (5 weeks)</div>'
+    +renderActivityCalendar()
+    +'</div>'
+    // Streaks
+    +'<div class="insight-section">'
+    +'<div class="is-title">Current Streaks 🔥</div>'
+    +'<div class="streak-display"><div class="sd-num">'+calcWalkStreak()+'</div><div><div class="sd-label">Walk Streak</div><div class="sd-sub">consecutive days walked</div></div></div>'
+    +'<div class="streak-display"><div class="sd-num">'+calcFastStreak()+'</div><div><div class="sd-label">Fast Streak</div><div class="sd-sub">consecutive days fasted</div></div></div>'
+    +'<div class="streak-display"><div class="sd-num">'+calcSleepStreak()+'</div><div><div class="sd-label">Sleep Logged</div><div class="sd-sub">consecutive days</div></div></div>'
+    +'</div>'
+    // Weight trend
+    +(weights.length?'<div class="insight-section"><div class="is-title">Weight Trend ⚖️</div>'+wtTrend+'</div>':'')
+    // Personal Records
+    +'<div class="insight-section">'
+    +'<div class="is-title">Personal Records 🏆</div>'
+    +prHTML
+    +'</div>'
+    // Patterns
+    +'<div class="insight-section">'
+    +'<div class="is-title">Patterns & Observations 💡</div>'
+    +patternHTML
+    +'</div>'
+    // Weekly check-in
+    +'<div class="insight-section">'
+    +'<div class="is-title">Weekly Check-in 📋</div>'
+    +lastCIHTML
+    +'<button class="btn btn-ghost btn-fw" style="margin-top:.75rem" onclick="openWeeklyCheckIn()">+ New Check-in</button>'
+    +'</div>';
+
+  // Check if Sunday and prompt check-in
+  checkSundayCheckIn();
+}
+
+// ── PATCH DASHBOARD to link to insights ──
+// Add check-in reminder on dashboard if Sunday
+var _origDash=renderDashboard;
+renderDashboard=function(){
+  _origDash();
+  // Check if weekly check-in is due
+  var d=new Date();
+  if(d.getDay()===0){
+    var lastCI=loadLocal('lastCheckIn',null);
+    if(lastCI!==today()){
+      var el=document.getElementById('pg-dashboard');
+      if(el){
+        var banner=document.createElement('div');
+        banner.style.cssText='background:var(--gold-lt);border:1px solid var(--gold);border-radius:10px;padding:.75rem 1rem;margin-bottom:.85rem;display:flex;align-items:center;justify-content:space-between;gap:.5rem';
+        banner.innerHTML='<div style="font-size:.84rem;color:#92400e"><strong>Sunday check-in</strong> — how was your week?</div>'
+          +'<button class="btn btn-sm" style="background:var(--gold);color:#fff;flex-shrink:0" onclick="openWeeklyCheckIn()">Check in</button>';
+        el.insertBefore(banner,el.firstChild);
+      }
+    }
+  }
+};
 </script>

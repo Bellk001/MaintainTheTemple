@@ -313,6 +313,20 @@ select.fi{cursor:pointer}
 .sd-label{font-size:.78rem;color:var(--mu);font-weight:600}
 .sd-sub{font-size:.72rem;color:var(--tx2)}
 .chart-container{position:relative;height:160px;margin:.5rem 0}
+
+/* CHARTS & EXTRAS */
+.chart-section{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r);padding:1.1rem 1.2rem;margin-bottom:.85rem}
+.chart-title{font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--mu);margin-bottom:.7rem}
+.photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-top:.5rem}
+.photo-thumb{aspect-ratio:1;border-radius:10px;background:var(--bg2);border:1.5px solid var(--bdr);overflow:hidden;position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.5rem}
+.photo-thumb img{width:100%;height:100%;object-fit:cover}
+.photo-date{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.5);color:#fff;font-size:.6rem;text-align:center;padding:.15rem}
+.meas-grid{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+.meas-box{background:var(--bg2);border-radius:10px;padding:.75rem .9rem}
+.meas-label{font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mu);margin-bottom:.2rem}
+.meas-val{font-size:1rem;font-weight:700;color:var(--tx)}
+.notif-row{display:flex;align-items:center;justify-content:space-between;padding:.6rem 0;border-bottom:1px solid var(--bdr)}
+.notif-row:last-child{border-bottom:none}
 </style>
 </head>
 <body>
@@ -1178,6 +1192,22 @@ function renderActiveFast(){
 // ═══════════════════════════════════════════════
 // BODY METRICS
 // ═══════════════════════════════════════════════
+function getMeasHTML(){
+  var md=loadLocal('measurements',{});
+  return ['Waist','Chest','Hips','Arms','Thighs','Neck'].map(function(m){
+    var val=md[m.toLowerCase()]||null;
+    return '<div class="meas-box"><div class="meas-label">'+m+'</div>'
+      +'<div class="meas-val">'+(val?val+' cm':'—')+'</div></div>';
+  }).join('');
+}
+function getPhotosHTML(){
+  var ph=loadLocal('progressPhotos',[]);
+  if(!ph.length) return '<div style="text-align:center;padding:1.5rem;color:var(--mu);font-size:.84rem">📸 No progress photos yet.<br>Add one monthly to track your transformation!</div>';
+  return '<div class="photo-grid">'+ph.slice(0,6).map(function(p){
+    return '<div class="photo-thumb"><img src="'+p.data+'" style="width:100%;height:100%;object-fit:cover"/>'
+      +'<div class="photo-date">'+fmtDate(p.date)+'</div></div>';
+  }).join('')+'</div>';
+}
 function renderBody(){
   document.getElementById('topbar-main').textContent='Body Metrics 📊';
   document.getElementById('topbar-sub').textContent='Track your progress';
@@ -1203,6 +1233,10 @@ function renderBody(){
       +'<div class="hist-right"><div class="hist-val">'+q+'</div></div>'
       +'</div>';
   }).join('')||'<div style="font-size:.84rem;color:var(--mu);padding:.5rem 0">No sleep logged yet.</div>';
+  var measOn=S.settings.meas;
+  var measData=loadLocal('measurements',{});
+  var photos=loadLocal('progressPhotos',[]);
+
   document.getElementById('pg-body').innerHTML=
     // BMI
     (p?'<div class="card"><div class="card-title">BMI & Weight</div>'
@@ -1225,7 +1259,22 @@ function renderBody(){
     // Sleep
     +'<div class="card"><div class="sec-head"><div class="sec-title">Sleep Log</div>'
     +'<button class="btn btn-ghost btn-sm" onclick="openMo(\'mo-sleep\')">+ Add</button></div>'
-    +sleepHTML+'</div>';
+    +sleepHTML+'</div>'
+    // Body Measurements
+    +(S.settings.meas?'<div class="card"><div class="sec-head"><div class="sec-title">Body Measurements</div>'
+      +'<button class="btn btn-ghost btn-sm" onclick="openMo(\'mo-measurements\')">&plus; Update</button></div>'
+      +'<div class="meas-grid">'+getMeasHTML()+'</div></div>':'')
+    // Progress Photos
+    +'<div class="card"><div class="sec-head"><div class="sec-title">Progress Photos 📸</div>'
+    +'<button class="btn btn-ghost btn-sm" onclick="document.getElementById(\'photo-upload\').click()">+ Add Photo</button></div>'
+    +'<input type="file" id="photo-upload" accept="image/*" style="display:none" onchange="handlePhotoUpload(event)"/>'
+    +getPhotosHTML()
+    +'</div>'
+    // Charts
+    +'<div class="chart-section"><div class="chart-title">Walk Distance — Last 14 days</div><canvas id="walk-chart" height="150"></canvas></div>'
+    +'<div class="chart-section"><div class="chart-title">Sleep Duration — Last 14 days</div><canvas id="sleep-chart" height="150"></canvas></div>'
+    +(S.weights.length>=2?'<div class="chart-section"><div class="chart-title">Weight Trend</div><canvas id="weight-chart" height="150"></canvas></div>':'');
+  setTimeout(function(){renderBodyCharts();},120);
 }
 
 // ═══════════════════════════════════════════════
@@ -1352,27 +1401,60 @@ function checkNotifications(){
   if(Notification.permission!=='granted') return;
   var now=new Date();
   var hm=pad(now.getHours())+':'+pad(now.getMinutes());
+  var hr=now.getHours();
+  var mins=now.getMinutes();
   var walkTime=loadLocal('notif_walk','17:30');
   var fastTime=loadLocal('notif_fast','20:00');
+  var sitHrs=parseInt(S.settings.sit||2);
   var lastNotif=loadLocal('last_notif',{});
   var todayStr=today();
+
+  // Walk reminder
   if(hm===walkTime&&lastNotif.walk!==todayStr){
-    new Notification('Maintain the Temple 🚶',{body:"Time for your evening walk! Let's go!",icon:'/icon.png'});
-    lastNotif.walk=todayStr;saveLocal('last_notif',lastNotif);
+    new Notification('Maintain the Temple 🚶',{body:"Time for your walk! Every step counts 💜"});
+    lastNotif.walk=todayStr;
   }
-  if(hm===fastTime&&lastNotif.fast!==todayStr){
-    new Notification('Maintain the Temple ⏱️',{body:"Time to start your fast. You've got this!",icon:'/icon.png'});
-    lastNotif.fast=todayStr;saveLocal('last_notif',lastNotif);
+  // Fast start reminder
+  if(hm===fastTime&&lastNotif.fast!==todayStr&&!S.fasting){
+    new Notification('Maintain the Temple ⏱️',{body:"Time to start your fast. You've got this!"});
+    lastNotif.fast=todayStr;
   }
-  // Water reminder every 2 hours
-  var sitHrs=parseInt(loadLocal('notif_sit',2));
-  if(now.getMinutes()===0&&now.getHours()%sitHrs===0){
-    var key='sit_'+hm+'_'+todayStr;
-    if(!lastNotif[key]){
-      new Notification('Maintain the Temple 💧',{body:"Time to drink some water and move around! 🧍‍♀️"});
-      lastNotif[key]=true;saveLocal('last_notif',lastNotif);
+  // Water reminder — every 2hrs between 7am and 8pm
+  if(mins===0&&hr>=7&&hr<=20&&hr%sitHrs===0){
+    var waterKey='water_'+hr+'_'+todayStr;
+    if(!lastNotif[waterKey]){
+      var waterL=(S.waterToday/1000).toFixed(1);
+      var targetL=(S.settings.waterTarget/1000);
+      new Notification('Maintain the Temple 💧',{body:'Drink some water! '+waterL+'L / '+targetL+'L so far today.'});
+      lastNotif[waterKey]=true;
     }
   }
+  // Sitting/stand-up reminder — every sitHrs between 9am and 5pm
+  if(mins===0&&hr>=9&&hr<=17&&hr%sitHrs===0){
+    var sitKey='sit_'+hr+'_'+todayStr;
+    if(!lastNotif[sitKey]){
+      new Notification('Maintain the Temple 🧍',{body:"You've been sitting — stand up and stretch for 2 minutes! 🙆‍♀️"});
+      lastNotif[sitKey]=true;
+    }
+  }
+  // Progress photo monthly reminder (1st of month at 8am)
+  if(now.getDate()===1&&hr===8&&mins===0){
+    var photoKey='photo_'+now.getMonth()+'_'+now.getFullYear();
+    if(!lastNotif[photoKey]){
+      new Notification('Maintain the Temple 📸',{body:"New month! Time for your monthly progress photo. Open the app to take it."});
+      lastNotif[photoKey]=true;
+    }
+  }
+  // Sunday check-in reminder at 9am
+  if(now.getDay()===0&&hr===9&&mins===0){
+    var ciKey='checkin_'+todayStr;
+    if(!lastNotif[ciKey]){
+      var lci=loadLocal('lastCheckIn',null);
+      if(lci!==todayStr) new Notification('Maintain the Temple 📋',{body:"It's Sunday! Time for your weekly check-in. How was your week?"});
+      lastNotif[ciKey]=true;
+    }
+  }
+  saveLocal('last_notif',lastNotif);
 }
 
 // ═══════════════════════════════════════════════
@@ -1539,6 +1621,24 @@ function initFastModal(){
 </div>
 </div>
 
+
+<!-- BODY MEASUREMENTS MODAL -->
+<div class="mo" id="mo-measurements">
+<div class="mo-box">
+  <div class="mo-handle"></div>
+  <div class="mo-title">Body Measurements 📏</div>
+  <div style="font-size:.82rem;color:var(--mu);margin-bottom:.9rem">Measure in cm. Update monthly to track progress.</div>
+  <div class="fi-row" style="display:grid;grid-template-columns:1fr 1fr;gap:.7rem">
+    <div class="fg"><label>Waist (cm)</label><input class="fi" type="number" id="m-waist" step="0.1" placeholder="e.g. 88"/></div>
+    <div class="fg"><label>Chest (cm)</label><input class="fi" type="number" id="m-chest" step="0.1" placeholder="e.g. 95"/></div>
+    <div class="fg"><label>Hips (cm)</label><input class="fi" type="number" id="m-hips" step="0.1" placeholder="e.g. 102"/></div>
+    <div class="fg"><label>Arms (cm)</label><input class="fi" type="number" id="m-arms" step="0.1" placeholder="e.g. 32"/></div>
+    <div class="fg"><label>Thighs (cm)</label><input class="fi" type="number" id="m-thighs" step="0.1" placeholder="e.g. 58"/></div>
+    <div class="fg"><label>Neck (cm)</label><input class="fi" type="number" id="m-neck" step="0.1" placeholder="e.g. 36"/></div>
+  </div>
+  <button class="btn btn-pu btn-fw" onclick="saveMeasurements()">Save Measurements</button>
+</div>
+</div>
 </body>
 </html>
 <script>
@@ -2808,6 +2908,236 @@ renderDashboard=function(){
           +'<button class="btn btn-sm" style="background:var(--gold);color:#fff;flex-shrink:0" onclick="openWeeklyCheckIn()">Check in</button>';
         el.insertBefore(banner,el.firstChild);
       }
+    }
+  }
+};
+</script>
+<script>
+// ═══════════════════════════════════════════════
+// BODY MEASUREMENTS
+// ═══════════════════════════════════════════════
+function openMeasurementsModal(){
+  var md=loadLocal('measurements',{});
+  ['waist','chest','hips','arms','thighs','neck'].forEach(function(m){
+    var el=document.getElementById('m-'+m);
+    if(el) el.value=md[m]||'';
+  });
+  openMo('mo-measurements');
+}
+function saveMeasurements(){
+  var fields=['waist','chest','hips','arms','thighs','neck'];
+  var md={date:today()};
+  fields.forEach(function(m){
+    var val=parseFloat(document.getElementById('m-'+m).value)||null;
+    if(val) md[m]=val;
+  });
+  // Save history too
+  var hist=loadLocal('measurementHistory',[]);
+  hist.unshift(md);
+  saveLocal('measurementHistory',hist);
+  saveLocal('measurements',md);
+  closeMo('mo-measurements');
+  renderBody();
+  toast('Measurements saved! 📏');
+}
+
+// ═══════════════════════════════════════════════
+// PROGRESS PHOTOS
+// ═══════════════════════════════════════════════
+function handlePhotoUpload(event){
+  var file=event.target.files[0];
+  if(!file) return;
+  if(file.size>5*1024*1024){toast('Photo too large. Max 5MB.','err');return;}
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var photos=loadLocal('progressPhotos',[]);
+    photos.unshift({data:e.target.result,date:today(),id:Date.now()});
+    // Keep max 24 photos
+    if(photos.length>24) photos=photos.slice(0,24);
+    saveLocal('progressPhotos',photos);
+    renderBody();
+    toast('Progress photo saved! 📸');
+  };
+  reader.readAsDataURL(file);
+  event.target.value='';
+}
+
+// ═══════════════════════════════════════════════
+// CHARTS — Walk, Sleep, Weight, Strength
+// ═══════════════════════════════════════════════
+var _charts={};
+function destroyChart(id){
+  if(_charts[id]){try{_charts[id].destroy();}catch(e){}delete _charts[id];}
+}
+function renderBodyCharts(){
+  renderWalkChart();
+  renderSleepChart();
+  if(S.weights.length>=2) renderWeightChart();
+}
+
+function renderWalkChart(){
+  var el=document.getElementById('walk-chart');
+  if(!el) return;
+  destroyChart('walk');
+  var walks=loadLocal('walks',[]);
+  // Last 14 days
+  var labels=[],data=[];
+  for(var i=13;i>=0;i--){
+    var d=new Date();d.setDate(d.getDate()-i);
+    var ds=d.toISOString().split('T')[0];
+    var dayWalks=walks.filter(function(w){return w.date===ds;});
+    var km=dayWalks.reduce(function(s,w){return s+w.dist_km;},0);
+    labels.push(d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}));
+    data.push(+km.toFixed(2));
+  }
+  _charts['walk']=new Chart(el,{
+    type:'bar',
+    data:{labels:labels,datasets:[{label:'km',data:data,backgroundColor:'rgba(124,58,237,.7)',borderRadius:6,borderSkipped:false}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{beginAtZero:true,grid:{color:'rgba(0,0,0,.05)'},ticks:{font:{size:10}}},
+              x:{grid:{display:false},ticks:{font:{size:9},maxRotation:45}}}}
+  });
+}
+function renderSleepChart(){
+  var el=document.getElementById('sleep-chart');
+  if(!el) return;
+  destroyChart('sleep');
+  var sleepLog=loadLocal('sleepLog',[]);
+  var labels=[],data=[];
+  for(var i=13;i>=0;i--){
+    var d=new Date();d.setDate(d.getDate()-i);
+    var ds=d.toISOString().split('T')[0];
+    var s=sleepLog.find(function(x){return x.date===ds;});
+    labels.push(d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}));
+    data.push(s?s.hrs:null);
+  }
+  _charts['sleep']=new Chart(el,{
+    type:'line',
+    data:{labels:labels,datasets:[{label:'hours',data:data,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,.1)',tension:0.35,fill:true,pointRadius:4,pointBackgroundColor:'#2563eb',spanGaps:true}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{beginAtZero:false,min:3,max:12,grid:{color:'rgba(0,0,0,.05)'},ticks:{font:{size:10},callback:function(v){return v+'h';}}},
+              x:{grid:{display:false},ticks:{font:{size:9},maxRotation:45}}}}
+  });
+}
+function renderWeightChart(){
+  var el=document.getElementById('weight-chart');
+  if(!el) return;
+  destroyChart('weight');
+  var weights=loadLocal('weights',[]).slice(0,20).reverse();
+  var labels=weights.map(function(w){return fmtShort(w.date);});
+  var data=weights.map(function(w){return w.kg;});
+  var minW=Math.min.apply(null,data)-2;
+  var maxW=Math.max.apply(null,data)+2;
+  _charts['weight']=new Chart(el,{
+    type:'line',
+    data:{labels:labels,datasets:[{label:'kg',data:data,borderColor:'#7c3aed',backgroundColor:'rgba(124,58,237,.1)',tension:0.35,fill:true,pointRadius:5,pointBackgroundColor:'#7c3aed'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{min:minW,max:maxW,grid:{color:'rgba(0,0,0,.05)'},ticks:{font:{size:10},callback:function(v){return v+'kg';}}},
+              x:{grid:{display:false},ticks:{font:{size:9},maxRotation:45}}}}
+  });
+}
+
+// ── Strength Progress Charts in Insights ──
+function renderStrengthChart(exId,canvasId){
+  var el=document.getElementById(canvasId);
+  if(!el) return;
+  destroyChart(canvasId);
+  var workouts=loadLocal('workouts',[]);
+  var sessions=[];
+  workouts.forEach(function(w){
+    var ex=w.exercises.find(function(e){return e.exId===exId;});
+    if(ex){
+      var best=ex.sets.reduce(function(b,s){return(s.weight*s.reps)>(b.weight*b.reps)?s:b;},{weight:0,reps:0});
+      sessions.unshift({date:w.date,weight:best.weight,reps:best.reps});
+    }
+  });
+  sessions=sessions.slice(-10);
+  if(sessions.length<2) return;
+  var labels=sessions.map(function(s){return fmtShort(s.date);});
+  var dataW=sessions.map(function(s){return s.weight;});
+  var dataR=sessions.map(function(s){return s.reps;});
+  _charts[canvasId]=new Chart(el,{
+    type:'line',
+    data:{labels:labels,datasets:[
+      {label:'Weight (kg)',data:dataW,borderColor:'#7c3aed',backgroundColor:'rgba(124,58,237,.1)',tension:0.3,yAxisID:'y'},
+      {label:'Reps',data:dataR,borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.1)',tension:0.3,yAxisID:'y1'}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:10}}}},
+      scales:{y:{position:'left',grid:{color:'rgba(0,0,0,.05)'},ticks:{font:{size:10}}},
+              y1:{position:'right',grid:{display:false},ticks:{font:{size:10}}},
+              x:{grid:{display:false},ticks:{font:{size:9},maxRotation:45}}}}
+  });
+}
+
+// ── Calorie chart in Nutrition ──
+function renderCalorieChart(){
+  var el=document.getElementById('cal-chart');
+  if(!el) return;
+  destroyChart('cal');
+  var mealLog=loadLocal('mealLog',[]);
+  var target=S.settings.cals||2100;
+  var labels=[],data=[],targets=[];
+  for(var i=13;i>=0;i--){
+    var d=new Date();d.setDate(d.getDate()-i);
+    var ds=d.toISOString().split('T')[0];
+    var cals=mealLog.filter(function(m){return m.date===ds;}).reduce(function(s,m){return s+m.cal;},0);
+    labels.push(d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}));
+    data.push(Math.round(cals));
+    targets.push(target);
+  }
+  _charts['cal']=new Chart(el,{
+    type:'bar',
+    data:{labels:labels,datasets:[
+      {label:'Calories',data:data,backgroundColor:'rgba(124,58,237,.7)',borderRadius:5,borderSkipped:false},
+      {label:'Target',data:targets,type:'line',borderColor:'#f59e0b',borderDash:[4,4],pointRadius:0,borderWidth:1.5}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:10}}}},
+      scales:{y:{beginAtZero:true,grid:{color:'rgba(0,0,0,.05)'},ticks:{font:{size:10}}},
+              x:{grid:{display:false},ticks:{font:{size:9},maxRotation:45}}}}
+  });
+}
+
+// ── Patch renderNutrition to add calorie chart ──
+var _origRenderNutr=renderNutrition;
+renderNutrition=function(){
+  _origRenderNutr();
+  // Add calorie chart section
+  var pg=document.getElementById('pg-nutrition');
+  if(pg){
+    var chartDiv=document.createElement('div');
+    chartDiv.className='chart-section';
+    chartDiv.innerHTML='<div class="chart-title">Daily Calories — Last 14 days</div><canvas id="cal-chart" height="150"></canvas>';
+    pg.appendChild(chartDiv);
+    setTimeout(renderCalorieChart,120);
+  }
+};
+
+// ── Patch renderStrength to add PR charts ──
+var _origRenderStr=renderStrength;
+renderStrength=function(){
+  _origRenderStr();
+  // Add strength progress section
+  var prs=loadLocal('personalRecords',{});
+  var prKeys=Object.keys(prs);
+  if(prKeys.length){
+    var pg=document.getElementById('pg-strength');
+    if(pg){
+      var div=document.createElement('div');
+      div.className='card';
+      div.innerHTML='<div class="sec-head"><div class="sec-title">Strength Progress 📈</div></div>'
+        +prKeys.slice(0,4).map(function(exId){
+          var ex=EXERCISES.find(function(e){return e.id===exId;});
+          var cId='sc-'+exId.replace(/[^a-z0-9]/gi,'');
+          return '<div class="chart-title" style="margin-top:.6rem">'+(ex?ex.name:exId)+'</div>'
+            +'<canvas id="'+cId+'" height="120"></canvas>';
+        }).join('');
+      pg.appendChild(div);
+      setTimeout(function(){
+        prKeys.slice(0,4).forEach(function(exId){
+          var cId='sc-'+exId.replace(/[^a-z0-9]/gi,'');
+          renderStrengthChart(exId,cId);
+        });
+      },150);
     }
   }
 };

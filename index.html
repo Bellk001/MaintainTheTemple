@@ -9,6 +9,34 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" type="text/css"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+/* WALK MAP FULLSCREEN */
+.walk-map-fullscreen{position:fixed;inset:0;z-index:80;background:var(--bg)}
+#walk-map-fs{width:100%;height:100%}
+.walk-map-ui{position:absolute;bottom:0;left:0;right:0;padding:1rem;background:linear-gradient(to top,rgba(0,0,0,.95) 0%,rgba(0,0,0,.7) 60%,transparent 100%);z-index:81}
+.walk-map-top{position:absolute;top:0;left:0;right:0;padding:.8rem 1rem;z-index:81;display:flex;gap:.5rem;align-items:center}
+.walk-search-box{flex:1;background:rgba(28,28,28,.95);border:1px solid rgba(255,255,255,.15);color:#fff;padding:.65rem 1rem;border-radius:99px;font-size:.88rem;font-family:'Space Grotesk',sans-serif}
+.walk-search-box::placeholder{color:rgba(255,255,255,.4)}
+.walk-search-results{position:absolute;top:4rem;left:1rem;right:1rem;background:rgba(28,28,28,.97);border:1px solid rgba(255,255,255,.1);border-radius:14px;z-index:82;overflow:hidden;max-height:220px;overflow-y:auto}
+.walk-sr-item{padding:.75rem 1rem;border-bottom:1px solid rgba(255,255,255,.07);cursor:pointer;color:#fff;font-size:.86rem}
+.walk-sr-item:hover{background:rgba(255,255,255,.07)}
+.walk-sr-item:last-child{border-bottom:none}
+.walk-live-stats{display:flex;gap:.5rem;margin-bottom:.75rem}
+.wls-box{flex:1;text-align:center}
+.wls-n{font-size:1.5rem;font-weight:800;letter-spacing:-.8px;color:#00C896;line-height:1}
+.wls-l{font-size:.56rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.5);margin-top:.15rem}
+/* BODY FIGURE */
+.body-figure-wrap{display:flex;gap:1rem;justify-content:center;align-items:flex-start;margin-bottom:1rem}
+.body-fig-side{display:flex;flex-direction:column;align-items:center;gap:.4rem}
+.body-fig-label{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--tx3)}
+.body-svg{width:140px;cursor:pointer}
+.muscle-hit{fill:rgba(0,200,150,.0);cursor:pointer;transition:fill .2s}
+.muscle-hit:hover,.muscle-hit.sel{fill:rgba(0,200,150,.5)}
+.flip-btn{background:var(--surf2);border:1px solid var(--bdr2);color:var(--tx2);padding:.4rem .9rem;border-radius:99px;font-size:.78rem;font-weight:700;cursor:pointer;margin-bottom:.5rem}
+/* CHART FIX */
+.chart-wrap{position:relative;height:150px;overflow:hidden}
+.chart-wrap canvas{position:absolute;top:0;left:0;width:100%!important;height:150px!important}
+</style>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
@@ -1686,6 +1714,10 @@ function calcStreak(arr,dateField){
 // ═══════════════════════════════════
 // WALK TRACKER
 // ═══════════════════════════════════
+// ═══ PASS 2: FULLSCREEN UBER-STYLE WALK MAP ═══
+var _fsMap=null, _fsMarker=null, _fsRoute=null, _fsAheadLine=null, _fsBehindLine=null;
+var _destCoords=null, _searchTimeout=null;
+
 function renderWalk(){
   var weekKm=S.walks.filter(function(w){var d=new Date(w.date),n=new Date();return (n-d)/86400000<=7;}).reduce(function(s,w){return s+w.dist_km;},0);
   var monthKm=S.walks.filter(function(w){var d=new Date(w.date),n=new Date();return d.getMonth()===n.getMonth()&&d.getFullYear()===n.getFullYear();}).reduce(function(s,w){return s+w.dist_km;},0);
@@ -1715,7 +1747,7 @@ function renderWalk(){
     +'<button class="btn btn-red btn-fw btn-lg" onclick="endWalk()">🛑 End Walk</button>'
     +'</div>'
     +'<div id="walk-start-btns" style="margin-top:.7rem;display:flex;gap:.5rem">'
-    +'<button class="btn btn-ac btn-fw btn-lg" onclick="startWalk()">🚶 Start Walk</button>'
+    +'<button class="btn btn-ac btn-fw btn-lg" onclick="openWalkMap()">🗺️ Open Walk Map</button>'
     +'</div></div>'
     +'<div class="card"><div class="sec-head"><div class="sec-title">Walk History</div></div>'+histHTML+'</div>';
   setTimeout(function(){initWalkMap();},80);
@@ -2922,5 +2954,499 @@ function checkNotifications(){
   setInterval(checkNotifications,60000);
 })();
 </script>
+
+<!-- FULLSCREEN WALK MAP -->
+<div id="walk-fs" style="display:none" class="walk-map-fullscreen">
+  <div class="walk-map-top">
+    <button onclick="closeWalkMap()" style="background:rgba(28,28,28,.9);border:1px solid rgba(255,255,255,.15);color:#fff;width:38px;height:38px;border-radius:99px;font-size:1rem;cursor:pointer;flex-shrink:0">✕</button>
+    <input class="walk-search-box" id="walk-dest-input" placeholder="Where are you going? (or leave blank for free walk)" oninput="searchDestination(this.value)"/>
+    <button onclick="startFreeWalk()" style="background:var(--ac);border:none;color:#000;padding:.5rem .9rem;border-radius:99px;font-size:.8rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">Free Walk</button>
+  </div>
+  <div class="walk-search-results" id="walk-search-results" style="display:none"></div>
+  <div id="walk-map-fs" style="width:100%;height:100%"></div>
+  <div class="walk-map-ui" id="walk-map-ui">
+    <!-- Pre-walk: route info -->
+    <div id="walk-pre-ui">
+      <div id="walk-route-info" style="display:none;background:rgba(28,28,28,.9);border-radius:12px;padding:.8rem 1rem;margin-bottom:.75rem;color:#fff">
+        <div style="font-size:.75rem;color:rgba(255,255,255,.6);margin-bottom:.2rem">Route to destination</div>
+        <div style="display:flex;gap:1.5rem">
+          <div><span id="route-dist" style="font-size:1.2rem;font-weight:800;color:#00C896">—</span><span style="font-size:.72rem;color:rgba(255,255,255,.5);margin-left:.2rem">km</span></div>
+          <div><span id="route-time" style="font-size:1.2rem;font-weight:800;color:#fff">—</span><span style="font-size:.72rem;color:rgba(255,255,255,.5);margin-left:.2rem">min walk</span></div>
+        </div>
+      </div>
+      <button id="walk-start-btn" class="btn btn-ac btn-fw btn-lg" onclick="beginWalk()">🚶 Start Walk</button>
+    </div>
+    <!-- During walk: live stats -->
+    <div id="walk-live-ui" style="display:none">
+      <div class="walk-live-stats">
+        <div class="wls-box"><div class="wls-n" id="wl-dist2">0.00</div><div class="wls-l">km</div></div>
+        <div class="wls-box"><div class="wls-n" id="wl-time2">00:00</div><div class="wls-l">time</div></div>
+        <div class="wls-box"><div class="wls-n" id="wl-pace2">—</div><div class="wls-l">min/km</div></div>
+        <div class="wls-box"><div class="wls-n" id="wl-cals2">0</div><div class="wls-l">cal</div></div>
+      </div>
+      <button class="btn btn-red btn-fw btn-lg" onclick="endWalkFS()">🛑 End Walk</button>
+    </div>
+  </div>
+</div>
+
+<!-- FULLSCREEN WALK MAP -->
+<div id="walk-map-screen" class="walk-map-fullscreen" style="display:none">
+  <div class="walk-map-top">
+    <button onclick="closeWalkMap()" style="background:rgba(28,28,28,.9);border:1px solid rgba(255,255,255,.15);color:#fff;width:38px;height:38px;border-radius:12px;font-size:1.1rem;cursor:pointer;flex-shrink:0">←</button>
+    <input class="walk-search-box" id="walk-dest-input" placeholder="Where are you going? (or leave blank for free walk)" oninput="searchDestination(this.value)"/>
+    <button onclick="clearDestination()" style="background:rgba(28,28,28,.9);border:1px solid rgba(255,255,255,.15);color:#fff;padding:.4rem .8rem;border-radius:99px;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap">Free Walk</button>
+  </div>
+  <div class="walk-search-results" id="walk-dest-results" style="display:none"></div>
+  <div id="walk-map-fs"></div>
+  <div class="walk-map-ui">
+    <div id="walk-live-ui" style="display:none">
+      <div class="walk-live-stats">
+        <div class="wls-box"><div class="wls-n" id="wls-dist">0.00</div><div class="wls-l">km</div></div>
+        <div class="wls-box"><div class="wls-n" id="wls-time">00:00</div><div class="wls-l">time</div></div>
+        <div class="wls-box"><div class="wls-n" id="wls-pace">—</div><div class="wls-l">min/km</div></div>
+        <div class="wls-box"><div class="wls-n" id="wls-cals">0</div><div class="wls-l">cal</div></div>
+      </div>
+      <button class="btn btn-red btn-fw btn-lg" onclick="endWalkFs()">🛑 End Walk</button>
+    </div>
+    <div id="walk-start-ui">
+      <button class="btn btn-ac btn-fw btn-lg" id="walk-start-btn" onclick="startWalkFs()" style="margin-top:.5rem">🚶 Start Walk</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
+<script>
+// ═══════════════════════════════════
+// PASS 2: FULLSCREEN UBER-STYLE WALK MAP
+// ═══════════════════════════════════
+var _fsMap=null,_fsWalkMarker=null,_fsBehindLine=null,_fsAheadLine=null;
+var _destCoords=null,_destSearchTimeout=null;
+var _fsWalkActive=false,_fsWalkRoute=[],_fsWalkDist=0,_fsWalkStart=null;
+var _fsWalkTimer=null,_fsWalkWatcher=null;
+
+function openWalkMap(){
+  var screen=document.getElementById('walk-map-screen');
+  screen.style.display='block';
+  setTimeout(function(){initFsMap();},100);
+}
+function closeWalkMap(){
+  if(_fsWalkActive){toast('End your walk first.');return;}
+  document.getElementById('walk-map-screen').style.display='none';
+}
+function initFsMap(){
+  if(_fsMap) return;
+  _fsMap=L.map('walk-map-fs',{zoomControl:false,attributionControl:false});
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(_fsMap);
+  _fsMap.setView([5.6037,-0.1870],15);
+  // Get current location
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(function(pos){
+      _fsMap.setView([pos.coords.latitude,pos.coords.longitude],17);
+      addFsMarker(pos.coords.latitude,pos.coords.longitude);
+    },null,{enableHighAccuracy:true,timeout:8000});
+  }
+}
+function addFsMarker(lat,lng){
+  if(_fsWalkMarker) _fsMap.removeLayer(_fsWalkMarker);
+  var icon=L.divIcon({
+    html:'<div style="font-size:2rem;line-height:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))">🚶</div>',
+    className:'',iconAnchor:[16,32]
+  });
+  _fsWalkMarker=L.marker([lat,lng],{icon:icon}).addTo(_fsMap);
+}
+
+// DESTINATION SEARCH (Nominatim)
+var _destSearchTimer=null;
+function searchDestination(q){
+  clearTimeout(_destSearchTimer);
+  var res=document.getElementById('walk-dest-results');
+  if(!q||q.length<3){res.style.display='none';return;}
+  _destSearchTimer=setTimeout(async function(){
+    try{
+      var r=await fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(q)+'&format=json&limit=5&countrycodes=gh&accept-language=en');
+      var data=await r.json();
+      if(!data.length){res.style.display='none';return;}
+      res.style.display='block';
+      res.innerHTML=data.map(function(d){
+        return '<div class="walk-sr-item" onclick="selectDest('+d.lat+','+d.lon+',\''+esc(d.display_name.split(',').slice(0,2).join(','))+'\')">'
+          +'📍 '+esc(d.display_name.split(',').slice(0,2).join(', '))+'</div>';
+      }).join('');
+    }catch(e){res.style.display='none';}
+  },500);
+}
+async function selectDest(lat,lng,name){
+  _destCoords={lat:parseFloat(lat),lng:parseFloat(lng)};
+  document.getElementById('walk-dest-input').value=name;
+  document.getElementById('walk-dest-results').style.display='none';
+  // Draw route ahead using OpenRouteService
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(async function(pos){
+      await drawRouteAhead(pos.coords.latitude,pos.coords.longitude,_destCoords.lat,_destCoords.lng);
+      // Fit map to route
+      if(_fsAheadLine) _fsMap.fitBounds(_fsAheadLine.getBounds(),{padding:[60,60]});
+    });
+  }
+}
+async function drawRouteAhead(fromLat,fromLng,toLat,toLng){
+  try{
+    // Use OSRM (free, no key needed)
+    var url='https://router.project-osrm.org/route/v1/foot/'+fromLng+','+fromLat+';'+toLng+','+toLat+'?overview=full&geometries=geojson';
+    var r=await fetch(url);
+    var data=await r.json();
+    if(!data.routes||!data.routes[0]) return;
+    var coords=data.routes[0].geometry.coordinates.map(function(c){return [c[1],c[0]];});
+    if(_fsAheadLine) _fsMap.removeLayer(_fsAheadLine);
+    _fsAheadLine=L.polyline(coords,{color:'#00C896',weight:5,opacity:.85,dashArray:'10,5'}).addTo(_fsMap);
+    var dist=data.routes[0].distance;
+    var dur=data.routes[0].duration;
+    toast('Route: '+(dist/1000).toFixed(1)+'km · ~'+Math.round(dur/60)+'min walk');
+  }catch(e){toast('Route not available — free walk mode');}
+}
+function clearDestination(){
+  _destCoords=null;
+  document.getElementById('walk-dest-input').value='';
+  document.getElementById('walk-dest-results').style.display='none';
+  if(_fsAheadLine){_fsMap.removeLayer(_fsAheadLine);_fsAheadLine=null;}
+  toast('Free walk mode — walk anywhere!');
+}
+
+// START WALK (fullscreen)
+async function startWalkFs(){
+  if(!navigator.geolocation){toast('GPS not available.');return;}
+  try{if(navigator.wakeLock) S.wakeLock=await navigator.wakeLock.request('screen');}catch(e){}
+  _fsWalkActive=true;_fsWalkRoute=[];_fsWalkDist=0;_fsWalkStart=Date.now();
+  document.getElementById('walk-start-ui').style.display='none';
+  document.getElementById('walk-live-ui').style.display='block';
+  // Clear ahead line — we'll draw progress behind
+  if(_fsAheadLine){_fsMap.removeLayer(_fsAheadLine);_fsAheadLine=null;}
+  if(_fsBehindLine){_fsMap.removeLayer(_fsBehindLine);_fsBehindLine=null;}
+  _fsWalkWatcher=navigator.geolocation.watchPosition(onFsGPS,function(e){},
+    {enableHighAccuracy:true,timeout:15000,maximumAge:2000});
+  _fsWalkTimer=setInterval(updateFsTimer,1000);
+  toast('Walk started! 🚶');
+}
+function onFsGPS(pos){
+  if(pos.coords.accuracy>30) return;
+  var pt={lat:pos.coords.latitude,lng:pos.coords.longitude,t:Date.now()};
+  if(_fsWalkRoute.length>0){
+    var last=_fsWalkRoute[_fsWalkRoute.length-1];
+    var d=haversine(last,pt);
+    var dt=(pt.t-last.t)/1000;
+    var spd=dt>0?d/dt*3.6:0;
+    if(d>10&&spd<12) _fsWalkDist+=d;
+  }
+  _fsWalkRoute.push(pt);
+  // Update walker marker — map follows smoothly
+  addFsMarker(pt.lat,pt.lng);
+  _fsMap.panTo([pt.lat,pt.lng],{animate:true,duration:0.8});
+  // Draw walked path behind
+  if(_fsWalkRoute.length>1){
+    if(_fsBehindLine) _fsMap.removeLayer(_fsBehindLine);
+    var ll=_fsWalkRoute.map(function(p){return [p.lat,p.lng];});
+    _fsBehindLine=L.polyline(ll,{color:'#00C896',weight:5,opacity:1}).addTo(_fsMap);
+  }
+  // Update stats
+  var el=document.getElementById('wls-dist');if(el) el.textContent=(_fsWalkDist/1000).toFixed(2);
+  var ce=document.getElementById('wls-cals');if(ce) ce.textContent=estimateCaloriesWalk(_fsWalkDist/1000,S.profile?S.profile.weight:80);
+  // If destination set — draw remaining route ahead
+  if(_destCoords&&_fsWalkRoute.length%10===0){
+    drawRouteAhead(pt.lat,pt.lng,_destCoords.lat,_destCoords.lng);
+  }
+}
+function updateFsTimer(){
+  if(!_fsWalkActive) return;
+  var elapsed=Math.floor((Date.now()-_fsWalkStart)/1000);
+  var el=document.getElementById('wls-time');if(el) el.textContent=fmtSecs(elapsed);
+  var km=_fsWalkDist/1000;
+  if(km>0.1){
+    var mins=elapsed/60;var pace=mins/km;
+    var pm=Math.floor(pace);var ps=Math.round((pace-pm)*60);
+    var pe=document.getElementById('wls-pace');if(pe) pe.textContent=pm+':'+pad(ps);
+  }
+}
+function endWalkFs(){
+  if(!_fsWalkActive) return;
+  clearInterval(_fsWalkTimer);
+  if(_fsWalkWatcher) navigator.geolocation.clearWatch(_fsWalkWatcher);
+  if(S.wakeLock) try{S.wakeLock.release();}catch(e){}
+  var elapsed=Math.floor((Date.now()-_fsWalkStart)/1000);
+  var km=+(_fsWalkDist/1000).toFixed(3);
+  var cals=estimateCaloriesWalk(km,S.profile?S.profile.weight:80);
+  var pace='—';
+  if(km>0.05){var m=elapsed/60;var p=m/km;pace=Math.floor(p)+':'+pad(Math.round((p-Math.floor(p))*60));}
+  document.getElementById('walk-done-stats').innerHTML=
+    '<div class="stat-row"><div class="stat-box"><div class="stat-n">'+km.toFixed(2)+'</div><div class="stat-l">km</div></div>'
+    +'<div class="stat-box"><div class="stat-n">'+fmtSecs(elapsed)+'</div><div class="stat-l">time</div></div>'
+    +'<div class="stat-box"><div class="stat-n">'+cals+'</div><div class="stat-l">cal</div></div></div>'
+    +'<div style="text-align:center;font-size:.82rem;color:var(--tx2);margin-top:.3rem">Pace: '+pace+'/km</div>';
+  S.pendingWalk={km:km,elapsed:elapsed,cals:cals,pace:pace,route:_fsWalkRoute.map(function(p){return {lat:p.lat,lng:p.lng};})};
+  _fsWalkActive=false;
+  document.getElementById('walk-live-ui').style.display='none';
+  document.getElementById('walk-start-ui').style.display='block';
+  document.getElementById('walk-map-screen').style.display='none';
+  S.walkFeel=3;
+  openMo('mo-walk-done');
+}
+
+// ═══════════════════════════════════
+// PASS 2: 3D REALISTIC BODY FIGURE
+// ═══════════════════════════════════
+var _bodyView='front'; // 'front' or 'back'
+var _selMuscle=null;
+
+// Override renderStrength to include body figure
+var _origRenderStrength=renderStrength;
+renderStrength=function(){
+  _origRenderStrength();
+  // Inject 3D body figure into strength page
+  var pg=document.getElementById('pg-strength');
+  if(!pg) return;
+  var figDiv=document.createElement('div');
+  figDiv.className='card';
+  figDiv.id='body-figure-card';
+  figDiv.innerHTML='<div class="sec-head"><div class="sec-title">3D Body Map</div>'
+    +'<button class="flip-btn" onclick="flipBodyFig()">↺ Flip to '+(_bodyView==='front'?'Back':'Front')+'</button></div>'
+    +'<div class="body-figure-wrap">'
+    +(_bodyView==='front'?renderBodyFront():renderBodyBack())
+    +'</div>'
+    +'<div id="body-fig-exs"></div>';
+  // Insert before templates card
+  var firstCard=pg.querySelector('.card');
+  if(firstCard) pg.insertBefore(figDiv,firstCard);
+  else pg.appendChild(figDiv);
+  if(_selMuscle) showBodyFigExercises(_selMuscle);
+};
+
+function flipBodyFig(){
+  _bodyView=_bodyView==='front'?'back':'front';
+  renderStrength();
+}
+function selectBodyMuscle(muscle){
+  _selMuscle=muscle;
+  // Highlight selected
+  document.querySelectorAll('.muscle-hit').forEach(function(el){
+    el.classList.toggle('sel',el.dataset.muscle===muscle);
+  });
+  showBodyFigExercises(muscle);
+}
+function showBodyFigExercises(muscle){
+  var el=document.getElementById('body-fig-exs');if(!el) return;
+  var exs=EXERCISES.filter(function(e){return e.muscles.indexOf(muscle)>-1;});
+  var mLabel=MUSCLES.find(function(m){return m.id===muscle;});
+  el.innerHTML='<div style="margin-top:.8rem"><div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--tx3);margin-bottom:.5rem">'
+    +(mLabel?mLabel.l:'') +' Exercises</div>'
+    +exs.map(function(e){
+      var pr=S.prs[e.id];
+      return '<div class="ex-card" onclick="openExercise(\''+e.id+'\')">'
+        +'<div class="ex-name">'+esc(e.name)+'</div>'
+        +'<div class="ex-meta">'+(e.equip==='dumbbell'?'🏋️':'🤸')+' '+e.equip+' · '+e.sets+'×'+e.reps+'</div>'
+        +(pr?'<div class="pr-badge" style="margin-top:.2rem">🏆 '+pr.weight+'kg × '+pr.reps+'</div>':'')
+        +'</div>';
+    }).join('')+'</div>';
+}
+
+function renderBodyFront(){
+  // SVG front body with clickable muscle regions
+  return '<svg class="body-svg" viewBox="0 0 120 280" xmlns="http://www.w3.org/2000/svg">'
+    // Body base silhouette
+    +'<defs><linearGradient id="skin" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#8B6553"/><stop offset="100%" style="stop-color:#6B4F3F"/></linearGradient>'
+    +'<linearGradient id="muscle-hl" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#00C896;stop-opacity:.7"/><stop offset="100%" style="stop-color:#00A87D;stop-opacity:.5"/></linearGradient></defs>'
+    // Head
+    +'<ellipse cx="60" cy="22" rx="18" ry="20" fill="url(#skin)" stroke="#5a3e31" stroke-width=".8"/>'
+    // Neck
+    +'<rect x="53" y="38" width="14" height="12" rx="3" fill="url(#skin)" stroke="#5a3e31" stroke-width=".5"/>'
+    // Torso
+    +'<path d="M30 50 Q20 55 20 75 L20 130 Q20 135 30 137 L90 137 Q100 135 100 130 L100 75 Q100 55 90 50 Z" fill="url(#skin)" stroke="#5a3e31" stroke-width=".8"/>'
+    // Arms
+    +'<path d="M20 52 Q8 58 6 80 Q5 100 8 115 Q10 122 15 120 Q20 118 22 112 L25 90 L22 60 Z" fill="url(#skin)" stroke="#5a3e31" stroke-width=".8"/>'
+    +'<path d="M100 52 Q112 58 114 80 Q115 100 112 115 Q110 122 105 120 Q100 118 98 112 L95 90 L98 60 Z" fill="url(#skin)" stroke="#5a3e31" stroke-width=".8"/>'
+    // Forearms
+    +'<path d="M8 115 Q5 125 4 145 Q4 155 8 158 Q13 160 16 155 L18 135 L15 120 Z" fill="url(#skin)" stroke="#5a3e31" stroke-width=".8"/>'
+    +'<path d="M112 115 Q115 125 116 145 Q116 155 112 158 Q107 160 104 155 L102 135 L105 120 Z" fill="url(#skin)" stroke="#5a3e31" stroke-width=".8"/>'
+    // Legs
+    +'<path d="M30 137 L25 145 L28 215 Q28 225 35 228 Q42 230 45 225 L50 155 L50 137 Z" fill="url(#skin)" stroke="#5a3e31" stroke-width=".8"/>'
+    +'<path d="M90 137 L95 145 L92 215 Q92 225 85 228 Q78 230 75 225 L70 155 L70 137 Z" fill="url(#skin)" stroke="#5a3e31" stroke-width=".8"/>'
+    // Calves
+    +'<path d="M28 215 Q26 230 28 250 Q30 260 35 262 Q40 263 43 258 L45 235 Q42 230 35 228 Z" fill="url(#skin)" stroke="#5a3e31" stroke-width=".8"/>'
+    +'<path d="M92 215 Q94 230 92 250 Q90 260 85 262 Q80 263 77 258 L75 235 Q78 230 85 228 Z" fill="url(#skin)" stroke="#5a3e31" stroke-width=".8"/>'
+    // Muscle definition lines
+    +'<line x1="60" y1="55" x2="60" y2="130" stroke="rgba(0,0,0,.2)" stroke-width=".8"/>'
+    +'<line x1="40" y1="80" x2="80" y2="80" stroke="rgba(0,0,0,.15)" stroke-width=".8"/>'
+    +'<line x1="40" y1="100" x2="80" y2="100" stroke="rgba(0,0,0,.15)" stroke-width=".8"/>'
+    +'<line x1="40" y1="120" x2="80" y2="120" stroke="rgba(0,0,0,.15)" stroke-width=".8"/>'
+    // CLICKABLE MUSCLE AREAS (invisible overlay)
+    // Chest
+    +'<path class="muscle-hit" data-muscle="chest" onclick="selectBodyMuscle(\'chest\')" d="M30 52 L90 52 L88 82 L32 82 Z" fill="rgba(0,0,0,0)" stroke="none"/>'
+    // Shoulders
+    +'<path class="muscle-hit" data-muscle="shoulders" onclick="selectBodyMuscle(\'shoulders\')" d="M20 50 L32 50 L30 68 L18 62 Z" fill="rgba(0,0,0,0)"/>'
+    +'<path class="muscle-hit" data-muscle="shoulders" onclick="selectBodyMuscle(\'shoulders\')" d="M100 50 L88 50 L90 68 L102 62 Z" fill="rgba(0,0,0,0)"/>'
+    // Biceps
+    +'<path class="muscle-hit" data-muscle="biceps" onclick="selectBodyMuscle(\'biceps\')" d="M7 70 L22 65 L24 95 L8 92 Z" fill="rgba(0,0,0,0)"/>'
+    +'<path class="muscle-hit" data-muscle="biceps" onclick="selectBodyMuscle(\'biceps\')" d="M113 70 L98 65 L96 95 L112 92 Z" fill="rgba(0,0,0,0)"/>'
+    // Triceps (sides of arms - front view partial)
+    +'<path class="muscle-hit" data-muscle="triceps" onclick="selectBodyMuscle(\'triceps\')" d="M8 92 L22 95 L20 115 L7 110 Z" fill="rgba(0,0,0,0)"/>'
+    +'<path class="muscle-hit" data-muscle="triceps" onclick="selectBodyMuscle(\'triceps\')" d="M112 92 L98 95 L100 115 L113 110 Z" fill="rgba(0,0,0,0)"/>'
+    // Forearms
+    +'<path class="muscle-hit" data-muscle="forearms" onclick="selectBodyMuscle(\'forearms\')" d="M5 118 L18 115 L16 155 L5 150 Z" fill="rgba(0,0,0,0)"/>'
+    +'<path class="muscle-hit" data-muscle="forearms" onclick="selectBodyMuscle(\'forearms\')" d="M115 118 L102 115 L104 155 L115 150 Z" fill="rgba(0,0,0,0)"/>'
+    // Abs
+    +'<path class="muscle-hit" data-muscle="abs" onclick="selectBodyMuscle(\'abs\')" d="M33 82 L87 82 L87 135 L33 135 Z" fill="rgba(0,0,0,0)"/>'
+    // Quads
+    +'<path class="muscle-hit" data-muscle="quads" onclick="selectBodyMuscle(\'quads\')" d="M28 140 L52 140 L50 215 L28 212 Z" fill="rgba(0,0,0,0)"/>'
+    +'<path class="muscle-hit" data-muscle="quads" onclick="selectBodyMuscle(\'quads\')" d="M92 140 L68 140 L70 215 L92 212 Z" fill="rgba(0,0,0,0)"/>'
+    // Calves
+    +'<path class="muscle-hit" data-muscle="calves" onclick="selectBodyMuscle(\'calves\')" d="M28 215 L45 215 L43 260 L28 255 Z" fill="rgba(0,0,0,0)"/>'
+    +'<path class="muscle-hit" data-muscle="calves" onclick="selectBodyMuscle(\'calves\')" d="M92 215 L75 215 L77 260 L92 255 Z" fill="rgba(0,0,0,0)"/>'
+    // Labels
+    +'<text x="60" y="70" text-anchor="middle" font-size="6" fill="rgba(255,255,255,.6)" font-family="Space Grotesk">Chest</text>'
+    +'<text x="60" y="108" text-anchor="middle" font-size="6" fill="rgba(255,255,255,.6)" font-family="Space Grotesk">Abs</text>'
+    +'<text x="14" y="82" text-anchor="middle" font-size="5" fill="rgba(255,255,255,.5)" font-family="Space Grotesk">Bi</text>'
+    +'<text x="106" y="82" text-anchor="middle" font-size="5" fill="rgba(255,255,255,.5)" font-family="Space Grotesk">Bi</text>'
+    +'<text x="39" y="180" text-anchor="middle" font-size="6" fill="rgba(255,255,255,.5)" font-family="Space Grotesk">Quad</text>'
+    +'<text x="81" y="180" text-anchor="middle" font-size="6" fill="rgba(255,255,255,.5)" font-family="Space Grotesk">Quad</text>'
+    +'</svg>';
+}
+
+function renderBodyBack(){
+  return '<svg class="body-svg" viewBox="0 0 120 280" xmlns="http://www.w3.org/2000/svg">'
+    +'<defs><linearGradient id="skin2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#7a5a48"/><stop offset="100%" style="stop-color:#5e4233"/></linearGradient></defs>'
+    // Head
+    +'<ellipse cx="60" cy="22" rx="18" ry="20" fill="url(#skin2)" stroke="#5a3e31" stroke-width=".8"/>'
+    // Neck
+    +'<rect x="53" y="38" width="14" height="12" rx="3" fill="url(#skin2)" stroke="#5a3e31" stroke-width=".5"/>'
+    // Torso (back)
+    +'<path d="M30 50 Q20 55 20 75 L20 130 Q20 135 30 137 L90 137 Q100 135 100 130 L100 75 Q100 55 90 50 Z" fill="url(#skin2)" stroke="#5a3e31" stroke-width=".8"/>'
+    // Arms
+    +'<path d="M20 52 Q8 58 6 80 Q5 100 8 115 Q10 122 15 120 Q20 118 22 112 L25 90 L22 60 Z" fill="url(#skin2)" stroke="#5a3e31" stroke-width=".8"/>'
+    +'<path d="M100 52 Q112 58 114 80 Q115 100 112 115 Q110 122 105 120 Q100 118 98 112 L95 90 L98 60 Z" fill="url(#skin2)" stroke="#5a3e31" stroke-width=".8"/>'
+    // Forearms
+    +'<path d="M8 115 Q5 125 4 145 Q4 155 8 158 Q13 160 16 155 L18 135 L15 120 Z" fill="url(#skin2)" stroke="#5a3e31" stroke-width=".8"/>'
+    +'<path d="M112 115 Q115 125 116 145 Q116 155 112 158 Q107 160 104 155 L102 135 L105 120 Z" fill="url(#skin2)" stroke="#5a3e31" stroke-width=".8"/>'
+    // Glutes + Hamstrings
+    +'<path d="M30 137 L25 145 L28 215 Q28 225 35 228 Q42 230 45 225 L50 155 L50 137 Z" fill="url(#skin2)" stroke="#5a3e31" stroke-width=".8"/>'
+    +'<path d="M90 137 L95 145 L92 215 Q92 225 85 228 Q78 230 75 225 L70 155 L70 137 Z" fill="url(#skin2)" stroke="#5a3e31" stroke-width=".8"/>'
+    // Calves
+    +'<path d="M28 215 Q26 230 28 250 Q30 260 35 262 Q40 263 43 258 L45 235 Q42 230 35 228 Z" fill="url(#skin2)" stroke="#5a3e31" stroke-width=".8"/>'
+    +'<path d="M92 215 Q94 230 92 250 Q90 260 85 262 Q80 263 77 258 L75 235 Q78 230 85 228 Z" fill="url(#skin2)" stroke="#5a3e31" stroke-width=".8"/>'
+    // Back muscle lines
+    +'<path d="M40 55 Q60 62 80 55" stroke="rgba(0,0,0,.25)" stroke-width="1" fill="none"/>'
+    +'<line x1="60" y1="55" x2="60" y2="135" stroke="rgba(0,0,0,.2)" stroke-width=".8"/>'
+    +'<path d="M25 70 Q60 85 95 70" stroke="rgba(0,0,0,.15)" stroke-width=".8" fill="none"/>'
+    +'<path d="M22 95 Q60 108 98 95" stroke="rgba(0,0,0,.15)" stroke-width=".8" fill="none"/>'
+    // CLICKABLE BACK MUSCLES
+    // Traps (upper back)
+    +'<path class="muscle-hit" data-muscle="traps" onclick="selectBodyMuscle(\'traps\')" d="M35 50 L85 50 L80 72 L40 72 Z" fill="rgba(0,0,0,0)"/>'
+    // Rear delts
+    +'<path class="muscle-hit" data-muscle="rear-delts" onclick="selectBodyMuscle(\'rear-delts\')" d="M20 50 L38 50 L35 68 L18 62 Z" fill="rgba(0,0,0,0)"/>'
+    +'<path class="muscle-hit" data-muscle="rear-delts" onclick="selectBodyMuscle(\'rear-delts\')" d="M100 50 L82 50 L85 68 L102 62 Z" fill="rgba(0,0,0,0)"/>'
+    // Lats (back)
+    +'<path class="muscle-hit" data-muscle="back" onclick="selectBodyMuscle(\'back\')" d="M22 68 L55 68 L52 130 L20 125 Z" fill="rgba(0,0,0,0)"/>'
+    +'<path class="muscle-hit" data-muscle="back" onclick="selectBodyMuscle(\'back\')" d="M98 68 L65 68 L68 130 L100 125 Z" fill="rgba(0,0,0,0)"/>'
+    // Lower back
+    +'<path class="muscle-hit" data-muscle="lower-back" onclick="selectBodyMuscle(\'lower-back\')" d="M40 120 L80 120 L82 138 L38 138 Z" fill="rgba(0,0,0,0)"/>'
+    // Triceps (back view)
+    +'<path class="muscle-hit" data-muscle="triceps" onclick="selectBodyMuscle(\'triceps\')" d="M7 68 L22 65 L23 100 L7 95 Z" fill="rgba(0,0,0,0)"/>'
+    +'<path class="muscle-hit" data-muscle="triceps" onclick="selectBodyMuscle(\'triceps\')" d="M113 68 L98 65 L97 100 L113 95 Z" fill="rgba(0,0,0,0)"/>'
+    // Glutes
+    +'<path class="muscle-hit" data-muscle="glutes" onclick="selectBodyMuscle(\'glutes\')" d="M28 137 L92 137 L90 172 L30 172 Z" fill="rgba(0,0,0,0)"/>'
+    // Hamstrings
+    +'<path class="muscle-hit" data-muscle="hamstrings" onclick="selectBodyMuscle(\'hamstrings\')" d="M28 172 L52 172 L50 215 L28 212 Z" fill="rgba(0,0,0,0)"/>'
+    +'<path class="muscle-hit" data-muscle="hamstrings" onclick="selectBodyMuscle(\'hamstrings\')" d="M92 172 L68 172 L70 215 L92 212 Z" fill="rgba(0,0,0,0)"/>'
+    // Calves
+    +'<path class="muscle-hit" data-muscle="calves" onclick="selectBodyMuscle(\'calves\')" d="M28 215 L45 215 L43 260 L28 255 Z" fill="rgba(0,0,0,0)"/>'
+    +'<path class="muscle-hit" data-muscle="calves" onclick="selectBodyMuscle(\'calves\')" d="M92 215 L75 215 L77 260 L92 255 Z" fill="rgba(0,0,0,0)"/>'
+    // Labels
+    +'<text x="60" y="63" text-anchor="middle" font-size="6" fill="rgba(255,255,255,.6)" font-family="Space Grotesk">Traps</text>'
+    +'<text x="36" y="100" text-anchor="middle" font-size="6" fill="rgba(255,255,255,.55)" font-family="Space Grotesk">Lats</text>'
+    +'<text x="84" y="100" text-anchor="middle" font-size="6" fill="rgba(255,255,255,.55)" font-family="Space Grotesk">Lats</text>'
+    +'<text x="60" y="155" text-anchor="middle" font-size="6" fill="rgba(255,255,255,.55)" font-family="Space Grotesk">Glutes</text>'
+    +'<text x="38" y="195" text-anchor="middle" font-size="6" fill="rgba(255,255,255,.5)" font-family="Space Grotesk">Hams</text>'
+    +'<text x="82" y="195" text-anchor="middle" font-size="6" fill="rgba(255,255,255,.5)" font-family="Space Grotesk">Hams</text>'
+    +'</svg>';
+}
+
+// ═══════════════════════════════════
+// PASS 2: FIXED CHARTS (no spread)
+// ═══════════════════════════════════
+var _charts={};
+function mkChart(canvasId,type,labels,datasets,opts){
+  if(_charts[canvasId]) try{_charts[canvasId].destroy();}catch(e){}
+  var el=document.getElementById(canvasId);
+  if(!el) return;
+  Chart.defaults.color=getComputedStyle(document.body).getPropertyValue('--tx2').trim()||'#A0A0A0';
+  Chart.defaults.borderColor=getComputedStyle(document.body).getPropertyValue('--bdr').trim()||'#2A2A2A';
+  Chart.defaults.font.family='Space Grotesk';
+  _charts[canvasId]=new Chart(el,{type:type,data:{labels:labels,datasets:datasets},options:Object.assign({
+    responsive:false,
+    animation:{duration:600},
+    plugins:{legend:{display:datasets.length>1,labels:{font:{size:10},boxWidth:12}}},
+    scales:{x:{grid:{display:false},ticks:{font:{size:9},maxRotation:0,maxTicksLimit:7}},
+            y:{beginAtZero:true,grid:{color:'rgba(128,128,128,.1)'},ticks:{font:{size:9}}}}
+  },opts||{})});
+}
+function getLast14Days(){
+  var days=[];
+  for(var i=13;i>=0;i--){var d=new Date();d.setDate(d.getDate()-i);days.push(d.toISOString().split('T')[0]);}
+  return days;
+}
+
+// Patch renderInsights to add charts
+var _origRenderInsights=renderInsights;
+renderInsights=function(){
+  _origRenderInsights();
+  var pg=document.getElementById('pg-insights');if(!pg) return;
+  var days=getLast14Days();
+  var labels=days.map(function(d){var dt=new Date(d+'T00:00:00');return dt.getDate()+'/'+(dt.getMonth()+1);});
+  // Walk chart
+  var walkData=days.map(function(d){return S.walks.filter(function(w){return w.date===d;}).reduce(function(s,w){return s+(w.dist_km||0);},0);});
+  var wDiv=document.createElement('div');wDiv.className='insight-section';
+  wDiv.innerHTML='<div class="is-title">Walk Distance — 14 days</div><div class="chart-wrap" style="height:150px"><canvas id="ch-walk" width="'+(window.innerWidth-60)+'" height="150"></canvas></div>';
+  pg.appendChild(wDiv);
+  // Calorie chart
+  var calData=days.map(function(d){return (S.mealLog||[]).filter(function(m){return m.date===d&&m.meal_type!=='rating';}).reduce(function(s,m){return s+(m.cal||0);},0);});
+  var cDiv=document.createElement('div');cDiv.className='insight-section';
+  cDiv.innerHTML='<div class="is-title">Daily Calories — 14 days</div><div class="chart-wrap" style="height:150px"><canvas id="ch-cal" width="'+(window.innerWidth-60)+'" height="150"></canvas></div>';
+  pg.appendChild(cDiv);
+  // Weight chart
+  var wts=(S.weights||[]).slice(0,12).reverse();
+  if(wts.length>=2){
+    var wtDiv=document.createElement('div');wtDiv.className='insight-section';
+    wtDiv.innerHTML='<div class="is-title">Weight Trend</div><div class="chart-wrap" style="height:150px"><canvas id="ch-wt" width="'+(window.innerWidth-60)+'" height="150"></canvas></div>';
+    pg.appendChild(wtDiv);
+  }
+  setTimeout(function(){
+    mkChart('ch-walk','bar',labels,[{label:'km',data:walkData,backgroundColor:'rgba(0,200,150,.75)',borderRadius:5,borderSkipped:false}]);
+    mkChart('ch-cal','bar',labels,[
+      {label:'Calories',data:calData,backgroundColor:'rgba(0,200,150,.65)',borderRadius:5},
+      {label:'Target',data:days.map(function(){return S.settings.cals||2100;}),type:'line',borderColor:'#FFB020',borderDash:[4,4],pointRadius:0,borderWidth:1.5}
+    ]);
+    if(wts.length>=2){
+      var mn=Math.min.apply(null,wts.map(function(w){return w.kg;}))-2;
+      var mx=Math.max.apply(null,wts.map(function(w){return w.kg;}))+2;
+      mkChart('ch-wt','line',wts.map(function(w){return fmtShort(w.date);}),
+        [{label:'kg',data:wts.map(function(w){return w.kg;}),borderColor:'#00C896',backgroundColor:'rgba(0,200,150,.08)',tension:.35,fill:true,pointRadius:4,pointBackgroundColor:'#00C896'}],
+        {scales:{y:{min:mn,max:mx}}});
+    }
+  },200);
+};
+
+// ═══════════════════════════════════
+// PASS 2: SESSION PERSISTENCE
+// Save token to localStorage so user stays logged in
+// ═══════════════════════════════════
+var _origDoSignIn=doSignIn;
+doSignIn=async function(){
+  await _origDoSignIn();
+  // Save session after successful sign in
+  if(S.token&&S.user){
+    var exp=new Date(Date.now()+7*24*3600*1000).toISOString();
+    localStorage.setItem('mtt_session',JSON.stringify({token:S.token,user:S.user,expires:exp}));
+  }
+};
+var _origDoSignOut=doSignOut;
+doSignOut=async function(){
+  localStorage.removeItem('mtt_session');
+  await _origDoSignOut();
+};
+</script>

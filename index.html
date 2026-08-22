@@ -1381,8 +1381,11 @@ async function doSignUp(){
   });
   if(r.error){errEl.textContent=r.error;errEl.style.display='block';btn.textContent='Create Account';btn.disabled=false;return;}
   // Auto sign in after signup
-  S.token=r.data.access_token;S.user=r.data.user;
+  S.token=r.data.access_token||null;
+  S.user=r.data.user||{id:r.data.id,email:em,user_metadata:{full_name:name}};
   S._pendingName=name;
+  S._pendingEmail=em;
+  S._pendingPw=pw;
   showOnboarding();
 }
 async function doSignOut(){
@@ -1445,8 +1448,8 @@ function obNext(step){
       +'<div style="font-size:.76rem;color:var(--tx2)">BMI · Age '+age+'</div></div></div>';
     S._ob.age=age;S._ob.bmi=bmi;
   }
-  if(step===2&&!S.obGoal){toast('Select a goal.');return;}
-  if(step===3&&!S.obActivity){toast('Select your activity level.');return;}
+  if(step===2&&!S.obGoal){toast('Select your goal to continue.');return;}
+  if(step===3&&!S.obActivity){toast('Select your activity level to continue.');return;}
   if(step===4){buildObPlan();}
   if(step===5){
     document.getElementById('o-water-sub').textContent=
@@ -1467,8 +1470,11 @@ function selActivity(btn){
   btn.classList.add('sel');S.obActivity=btn.dataset.a;
 }
 function buildObPlan(){
-  var ob=S._ob;
-  var bmr=calcBMR(ob.weight,ob.height,ob.age,ob.sex);
+  var ob=S._ob||{};
+  if(!ob.weight||!ob.height||!ob.age){toast('Go back and fill your body stats.');return;}
+  if(!S.obGoal) S.obGoal='recomp';
+  if(!S.obActivity) S.obActivity='moderate';
+  var bmr=calcBMR(ob.weight,ob.height,ob.age,ob.sex||'female');
   var tdee=calcTDEE(bmr,S.obActivity);
   var cals=calcCalTarget(tdee,S.obGoal);
   S._obCals=cals;
@@ -1489,20 +1495,53 @@ function mkPlanCard(label,val,sub){
 }
 async function finishOnboard(){
   var ob=S._ob;
-  var name=S._pendingName||S.user.user_metadata&&S.user.user_metadata.full_name||'Friend';
+  if(!ob){toast('Something went wrong. Please restart.');return;}
+  if(!S.user){toast('Not signed in. Please restart.');return;}
+
+  // Show loading state
+  var btn=document.querySelector('#os-6 .btn-ac');
+  if(btn){btn.textContent='Saving...';btn.disabled=true;}
+
+  // If token missing (Supabase email confirm flow), try to get session
+  if(!S.token){
+    try{
+      var sess=await sbFetch(SB_URL+'/auth/v1/token?grant_type=password',{
+        method:'POST',headers:{'Content-Type':'application/json','apikey':SB_KEY},
+        body:JSON.stringify({email:S._pendingEmail,password:S._pendingPw})
+      });
+      if(sess.data&&sess.data.access_token){
+        S.token=sess.data.access_token;
+        S.user=sess.data.user;
+      }
+    }catch(e){}
+  }
+
+  var name=S._pendingName||
+    (S.user.user_metadata&&S.user.user_metadata.full_name)||
+    (S.user.email?S.user.email.split('@')[0]:'Friend');
+
   var profile={
     user_id:S.user.id,name:name,dob:ob.dob,sex:ob.sex,
     weight:ob.weight,height:ob.height,age:ob.age,bmi:ob.bmi,
-    goal:S.obGoal,activity:S.obActivity,
+    goal:S.obGoal||'recomp',activity:S.obActivity||'moderate',
     cals:parseInt(document.getElementById('o-cal-target').value)||S._obCals||2100,
     water_target:parseInt(document.getElementById('o-water-target').value)||3200,
-    walk_time:document.getElementById('o-walk-time').value,
-    fast_time:document.getElementById('o-fast-time').value,
+    walk_time:document.getElementById('o-walk-time').value||'17:30',
+    fast_time:document.getElementById('o-fast-time').value||'20:00',
     water_freq:parseInt(document.getElementById('o-water-freq').value)||2,
     sit_freq:parseInt(document.getElementById('o-sit-freq').value)||2,
   };
+
   var r=await sbPost('mtt_profiles',profile);
-  if(r.error){toast('Error saving profile: '+r.error,'err');return;}
+  if(r.error){
+    // Maybe profile already exists (double tap) — try updating
+    var r2=await sbPatch('mtt_profiles',profile,'user_id=eq.'+S.user.id);
+    if(r2.error){
+      if(btn){btn.textContent='Start My Journey 🏛️';btn.disabled=false;}
+      toast('Error: '+r.error);return;
+    }
+  }
+
   S.profile=profile;
   S.settings.cals=profile.cals;
   S.settings.waterTarget=profile.water_target;
@@ -1510,8 +1549,16 @@ async function finishOnboard(){
   S.settings.fastTime=profile.fast_time;
   S.settings.waterFreq=profile.water_freq;
   S.settings.sitFreq=profile.sit_freq;
-  // Save initial weight
-  await sbPost('mtt_weights',{user_id:S.user.id,kg:ob.weight,date:today()});
+
+  // Save initial weight (don't block on failure)
+  try{await sbPost('mtt_weights',{user_id:S.user.id,kg:ob.weight,date:today()});}catch(e){}
+
+  // Save session
+  if(S.token&&S.user){
+    var exp=new Date(Date.now()+7*24*3600*1000).toISOString();
+    localStorage.setItem('mtt_session',JSON.stringify({token:S.token,user:S.user,expires:exp}));
+  }
+
   document.getElementById('onboard-screen').style.display='none';
   showApp();
 }
